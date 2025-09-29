@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tools Index</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f8f9fa;
+      color: #333;
+      padding: 2rem;
+    }
+    h1 {
+      text-align: center;
+      color: #222;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+      max-width: 600px;
+      margin: 2rem auto;
+    }
+    li {
+      background: #fff;
+      margin: 0.5rem 0;
+      padding: 1rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    a {
+      text-decoration: none;
+      color: #007acc;
+      font-weight: bold;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>Available Tools</h1>
+  <ul id="tools-list"></ul>
+
+	<script>
+	  async function loadTools() {
+		try {
+		  const response = await fetch("./tools.json"); // now at project root
+		  if (!response.ok) throw new Error("Could not fetch tools.json");
+		  const files = await response.json();
+
+		  const list = document.getElementById("tools-list");
+		  files.sort().forEach(file => {   // auto sort alphabetically
+			const li = document.createElement("li");
+			const link = document.createElement("a");
+			link.href = `./tools/${file}`;
+			link.textContent = file.replace(".html", "");
+			li.appendChild(link);
+			list.appendChild(li);
+		  });
+		} catch (err) {
+		  console.error(err);
+		  document.getElementById("tools-list").innerHTML =
+			"<li>Could not load tools list.</li>";
+		}
+	  }
+
+	  loadTools();
+	</script>
+
+</body>
+</html>

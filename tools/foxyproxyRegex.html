@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Domain Regex Generator</title>
+<style>
+  :root { --bg:#0f172a; --panel:#111827; --ink:#e5e7eb; --muted:#9ca3af; --accent:#22d3ee; --ok:#10b981; --bad:#ef4444; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji"; background: radial-gradient(1200px 800px at 10% -10%, #111827 10%, #0b1224 40%, #060a18 70%), var(--bg); color: var(--ink); }
+  .wrap { max-width: 900px; margin: 48px auto; padding: 0 20px; }
+  h1 { font-size: clamp(22px, 3vw, 32px); line-height: 1.2; margin: 0 0 18px; letter-spacing: .2px; }
+  p { color: var(--muted); margin: 0 0 22px; }
+  .card { background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06); padding: 18px; }
+  .row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end; }
+  label { display:block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+  input[type="text"] { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.14); background: #0b1221; color: var(--ink); outline: none; font-size: 16px; }
+  input[type="text"]::placeholder{ color: #6b7280; }
+  button { appearance: none; border: 0; padding: 12px 16px; border-radius: 12px; font-weight: 600; background: linear-gradient(180deg, #1fb6ff, #00d1d1); color: #002233; cursor: pointer; transition: transform .05s ease; }
+  button:active { transform: translateY(1px); }
+  .outputs { margin-top: 18px; display: grid; gap: 14px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 14px; }
+  .box { background: #0b1221; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; }
+  .flex { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+  .tag { font-size: 12px; padding: 4px 8px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); color: var(--muted); }
+  .copy { background: none; border: 1px solid rgba(255,255,255,.18); color: var(--ink); padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+  .grid { display: grid; gap: 10px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px dashed rgba(255,255,255,0.08); }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .3px; text-transform: uppercase; }
+  .pill { display:inline-flex; align-items:center; gap:8px; padding: 4px 10px; border-radius: 999px; font-size: 12px; }
+  .ok { background: rgba(16,185,129,.12); color: #a7f3d0; border: 1px solid rgba(16,185,129,.35); }
+  .bad { background: rgba(239,68,68,.12); color: #fecaca; border: 1px solid rgba(239,68,68,.35); }
+  .small { font-size: 12px; color: var(--muted); }
+  .footer { margin-top: 20px; color: var(--muted); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Single-Line Domain Regex Generator</h1>
+    <p>Enter a domain (e.g., <span class="mono">example.com</span>) to generate a single regex that matches protocol/bare/subdomain forms, with optional ports and paths.</p>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label for="domain">Domain</label>
+          <input id="domain" type="text" placeholder="example.com" />
+        </div>
+        <div>
+          <button id="generate">Generate</button>
+        </div>
+      </div>
+
+      <div class="outputs">
+        <div class="box grid">
+          <div class="flex">
+            <div class="tag">Generated Regex (case-insensitive)</div>
+            <button class="copy" id="copy">Copy</button>
+          </div>
+          <code class="mono" id="regexOut"></code>
+          <div class="small">Anchored with <span class="mono">^</span> and <span class="mono">$</span> for full-string matches.</div>
+        </div>
+
+        <div class="box grid">
+          <div class="tag">Test Matches</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Input</th>
+                <th>Matches?</th>
+              </tr>
+            </thead>
+            <tbody id="tests"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">Tip: Works with optional ports (<span class="mono">:8080</span>) and paths (<span class="mono">/foo/bar</span>).</div>
+  </div>
+
+<script>
+  function escapeRegExp(str) {
+    // Escapes regex special chars in a literal domain
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function buildRegexString(domain) {
+    const escaped = escapeRegExp(domain.trim());
+    // ^(?:.*://(?:.*\.)?DOMAIN(?::\d+)?(?:/.*)?|DOMAIN(?::\d+)?(?:/.*)?|(?:.*\.)DOMAIN(?::\d+)?(?:/.*)?)$
+    return `^(?:.*://(?:.*\\.)?${escaped}(?::\\d+)?(?:/.*)?|${escaped}(?::\\d+)?(?:/.*)?|(?:.*\\.)${escaped}(?::\\d+)?(?:/.*)?)$`;
+  }
+
+  function defaultTests(domain) {
+    return [
+      `http://${domain}`,
+      `http://${domain}/`,
+      `http://${domain}:8080`,
+      `http://${domain}:8080/path`,
+      `https://sub.${domain}`,
+      `https://sub.${domain}:3000/login`,
+      `${domain}`,
+      `${domain}/home`,
+      `Sub.${domain}:9000/dashboard`,
+    ];
+  }
+
+  function render() {
+    const domain = document.getElementById('domain').value.trim();
+    const out = document.getElementById('regexOut');
+    const tbody = document.getElementById('tests');
+
+    if (!domain) {
+      out.textContent = '';
+      tbody.innerHTML = '';
+      return;
+    }
+
+    const patternStr = buildRegexString(domain);
+    out.textContent = patternStr;
+
+    const re = new RegExp(patternStr, 'i'); // case-insensitive
+    const rows = defaultTests(domain).map(sample => {
+      const ok = re.test(sample);
+      const pill = ok
+        ? `<span class="pill ok">true</span>`
+        : `<span class="pill bad">false</span>`;
+      return `<tr><td class="mono">${sanitize(sample)}</td><td>${pill}</td></tr>`;
+    });
+    tbody.innerHTML = rows.join('');
+  }
+
+  function sanitize(s) {
+    return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  document.getElementById('generate').addEventListener('click', render);
+  document.getElementById('domain').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { render(); }
+  });
+
+  document.getElementById('copy').addEventListener('click', async () => {
+    const text = document.getElementById('regexOut').textContent.trim();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      const btn = document.getElementById('copy');
+      const old = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => (btn.textContent = old), 1000);
+    } catch {}
+  });
+
+  // Prefill with example
+  document.getElementById('domain').value = 'example.com';
+  render();
+</script>
+</body>
+</html>

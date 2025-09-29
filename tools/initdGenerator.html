@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Init.d Script Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #1e1e1e;
+      color: #f0f0f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    .form-group {
+      margin-bottom: 12px;
+      width: 100%;
+      max-width: 500px;
+    }
+    label {
+      display: block;
+      margin-bottom: 4px;
+    }
+    input, select, textarea, button {
+      width: 100%;
+      padding: 8px;
+      border-radius: 6px;
+      border: none;
+      font-size: 14px;
+    }
+    button {
+      background: #0078d7;
+      color: white;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    button:hover {
+      background: #005ea3;
+    }
+    textarea {
+      height: 300px;
+      font-family: monospace;
+      white-space: pre;
+    }
+  </style>
+</head>
+<body>
+  <h1>Init.d Script Generator</h1>
+
+  <div class="form-group">
+    <label for="serviceName">Service Name</label>
+    <input type="text" id="serviceName" placeholder="e.g. minecraftserver">
+  </div>
+
+  <div class="form-group">
+    <label for="command">Program Command</label>
+    <input type="text" id="command" placeholder="e.g. java -Xmx1024M -Xms1024M -jar server.jar nogui">
+  </div>
+
+  <div class="form-group">
+    <label for="screenOption">Run inside screen?</label>
+    <select id="screenOption">
+      <option value="yes">Yes</option>
+      <option value="no">No</option>
+    </select>
+  </div>
+  
+  <div class="form-group">
+	<button onclick="generateScript()">Generate Script</button>
+  </div>
+
+  <div class="form-group">
+    <label for="output">Generated init.d Script</label>
+    <textarea id="output" readonly></textarea>
+    <button onclick="copyOutput()">Copy to Clipboard</button>
+  </div>
+
+  <script>
+    function generateScript() {
+      const serviceName = document.getElementById("serviceName").value.trim();
+      const command = document.getElementById("command").value.trim();
+      const useScreen = document.getElementById("screenOption").value === "yes";
+
+      if (!serviceName || !command) {
+        alert("Please fill in all fields.");
+        return;
+      }
+
+      let screenCmd = useScreen
+        ? `screen -dmS ${serviceName} ${command}`
+        : command;
+
+      let script = `#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          ${serviceName}
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: ${serviceName} service
+### END INIT INFO
+
+SERVICE_NAME="${serviceName}"
+COMMAND="${command}"
+PIDFILE="/var/run/$SERVICE_NAME.pid"
+
+start() {
+    echo "Starting $SERVICE_NAME..."
+    if [ -f $PIDFILE ] && kill -0 $(cat $PIDFILE) 2>/dev/null; then
+        echo "$SERVICE_NAME is already running."
+        return 1
+    fi
+    nohup ${useScreen ? `screen -dmS $SERVICE_NAME $COMMAND` : `$COMMAND`} >/dev/null 2>&1 &
+    echo $! > $PIDFILE
+    echo "$SERVICE_NAME started."
+}
+
+stop() {
+    echo "Stopping $SERVICE_NAME..."
+    if [ ! -f $PIDFILE ]; then
+        echo "$SERVICE_NAME is not running."
+        return 1
+    fi
+    kill $(cat $PIDFILE) && rm -f $PIDFILE
+    echo "$SERVICE_NAME stopped."
+}
+
+status() {
+    if [ -f $PIDFILE ] && kill -0 $(cat $PIDFILE) 2>/dev/null; then
+        echo "$SERVICE_NAME is running with PID $(cat $PIDFILE)."
+    else
+        echo "$SERVICE_NAME is not running."
+    fi
+}
+
+restart() {
+    stop
+    sleep 2
+    start
+}
+
+case "$1" in
+    start) start ;;
+    stop) stop ;;
+    restart) restart ;;
+    status) status ;;
+    *) echo "Usage: $0 {start|stop|status|restart}" ;;
+esac
+
+exit 0`;
+
+      document.getElementById("output").value = script;
+    }
+
+    function copyOutput() {
+      const output = document.getElementById("output");
+      output.select();
+      document.execCommand("copy");
+      alert("Script copied to clipboard!");
+    }
+  </script>
+</body>
+</html>
