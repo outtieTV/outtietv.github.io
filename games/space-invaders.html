@@ -377,7 +377,7 @@
             cancelAnimationFrame(gameLoopId); 
             
             gameState.level++;
-            messageText.textContent = `LEVEL ${gameState.level} CLEARED!`;
+            messageText.textContent = `LEVEL ${gameState.level - 1} CLEARED!`;
             restartButton.textContent = 'CONTINUE';
             messageBox.style.display = 'block';
 
@@ -444,3 +444,4 @@
     </script>
 </body>
 </html>
+
