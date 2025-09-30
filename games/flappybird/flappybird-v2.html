@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Gemini</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f8ff; /* Light sky background */
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            position: relative;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 4px solid #333;
+        }
+
+        #gameCanvas {
+            display: block;
+            background-color: #70c5ce; /* Flappy Bird Sky fallback */
+            /* Fixed canvas size for classic feel, will be scaled by CSS */
+            width: 100%;
+            max-width: 400px;
+            height: auto;
+            aspect-ratio: 10 / 16;
+        }
+
+        #messageBox {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 24px 32px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            border: 3px solid #ffcc00;
+            cursor: pointer;
+            z-index: 100;
+            transition: opacity 0.3s;
+        }
+
+        #messageBox.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #messageBox h2 {
+            font-size: 2rem;
+            color: #d85f39;
+            margin-bottom: 8px;
+            font-weight: 700;
+            text-shadow: 1px 1px 0 #fff;
+        }
+
+        #messageBox p {
+            font-size: 1.1rem;
+            color: #333;
+            margin-bottom: 0;
+        }
+
+        .score-display {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 2px 2px 0 #000;
+            z-index: 50;
+        }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer" class="w-full max-w-sm">
+    <canvas id="gameCanvas" width="300" height="480"></canvas>
+    <div id="scoreDisplay" class="score-display">0</div>
+
+    <div id="messageBox" class="text-white">
+        <h2>Flappy Gemini</h2>
+        <p>Click or tap to start and flap!</p>
+    </div>
+</div>
+
+<script>
+    // --- Configuration and Constants ---
+    const CANVAS = document.getElementById('gameCanvas');
+    const CTX = CANVAS.getContext('2d');
+    const SCORE_DISPLAY = document.getElementById('scoreDisplay');
+    const MESSAGE_BOX = document.getElementById('messageBox');
+
+    // Game dimensions
+    const WIDTH = CANVAS.width;
+    const HEIGHT = CANVAS.height;
+
+    // Bird constants
+    const BIRD_HITBOX_SIZE = 24; // Simplified square hitbox for collision
+    const BIRD_SPRITE_WIDTH = 34;
+    const BIRD_SPRITE_HEIGHT = 24;
+    const BIRD_X = 60;
+    const GRAVITY = 0.5;
+    const FLAP_VELOCITY = -8;
+    const TERMINAL_VELOCITY = 10;
+
+    // Pipe constants
+    const PIPE_WIDTH = 52; // Width based on common sprite dimensions
+    const PIPE_CAP_HEIGHT = 30; // Estimated cap height on the sprite
+    const PIPE_GAP = 120; // Vertical gap
+    const PIPE_SPEED = 3;
+    const PIPE_SPAWN_INTERVAL = 140; // in frames
+
+    // Ground constants (Height based on common sprite size)
+    const GROUND_HEIGHT = 50;
+
+    // Game State and Assets
+    let currentState = 'LOADING'; // Initial state
+    let score = 0;
+    let frames = 0;
+    let animationId = null;
+    let groundX = 0; // For scrolling ground
+
+    const ASSETS = {};
+    const IMAGE_ASSET_PATHS = {
+        bg: './sprites/background-day.png',
+        ground: './sprites/base.png',
+        pipe: './sprites/pipe-green.png',
+        birdUp: './sprites/yellowbird-upflap.png',
+        birdMid: './sprites/yellowbird-midflap.png',
+        birdDown: './sprites/yellowbird-downflap.png',
+    };
+
+    const AUDIO_ASSET_PATHS = {
+        flap: './audio/wing.wav',
+        hit: './audio/hit.wav',
+        score: './audio/point.wav',
+        swoosh: './audio/swoosh.wav',
+        die: './audio/die.wav'
+    };
+
+    /**
+     * Loads all image and audio assets and stores them in the ASSETS object.
+     * @returns {Promise<void>} Resolves when all assets have attempted to load.
+     */
+    function loadAssets() {
+        return new Promise((resolve) => {
+            const imageKeys = Object.keys(IMAGE_ASSET_PATHS);
+            const audioKeys = Object.keys(AUDIO_ASSET_PATHS);
+            const totalAssets = imageKeys.length + audioKeys.length;
+            let loadedCount = 0;
+
+            const assetLoaded = () => {
+                loadedCount++;
+                if (loadedCount === totalAssets) {
+                    resolve();
+                }
+            };
+
+            // Load Images
+            for (const key of imageKeys) {
+                const img = new Image();
+                img.onload = assetLoaded;
+                img.onerror = () => {
+                    console.error(`Failed to load image: ${IMAGE_ASSET_PATHS[key]}`);
+                    // Use a mock object/color fallback if loading fails
+                    assetLoaded(); 
+                };
+                img.src = IMAGE_ASSET_PATHS[key];
+                ASSETS[key] = img;
+            }
+
+            // Load Audio
+            for (const key of audioKeys) {
+                // Prioritize .wav files, but using the Audio constructor is standard.
+                const audio = new Audio(AUDIO_ASSET_PATHS[key]);
+                audio.load();
+                ASSETS[key] = audio;
+                assetLoaded(); // Audio loading is often assumed to be immediate or handled asynchronously
+            }
+        });
+    }
+
+
+    /**
+     * Plays a sound effect by name.
+     * @param {string} name - Key of the audio asset (e.g., 'flap', 'score').
+     */
+    function playSound(name) {
+        if (ASSETS[name]) {
+            // Stop and rewind before playing to allow rapid playback
+            ASSETS[name].currentTime = 0;
+            ASSETS[name].play().catch(() => {
+                // Catch play errors (e.g., user hasn't interacted yet)
+                // console.log(`[AUDIO] Failed to play sound: ${name}`);
+            });
+        } else {
+            console.log(`[AUDIO] Sound asset not found: ${name}`);
+        }
+    }
+
+    // --- Bird Object ---
+    const bird = {
+        y: HEIGHT / 2 - BIRD_SPRITE_HEIGHT / 2,
+        velocity: 0,
+        x: BIRD_X,
+        width: BIRD_SPRITE_WIDTH,
+        height: BIRD_SPRITE_HEIGHT,
+        rotation: 0, // For visual tilt
+        animationFrame: 0, // 0: down, 1: mid, 2: up
+        frameCounter: 0,
+
+        draw() {
+            // Calculate rotation based on velocity (tilt effect)
+            this.rotation = Math.min(Math.PI / 2, Math.max(-Math.PI / 4, this.velocity / 20 * Math.PI));
+
+            CTX.save();
+            // Translate origin to the bird's center for rotation
+            CTX.translate(this.x + this.width / 2, this.y + this.height / 2);
+            CTX.rotate(this.rotation);
+
+            // Cycle through animation frames every 5 frames
+            this.frameCounter++;
+            if (this.frameCounter % 5 === 0) {
+                this.animationFrame = (this.animationFrame + 1) % 3;
+            }
+
+            let sprite;
+            if (this.animationFrame === 0) {
+                sprite = ASSETS.birdDown;
+            } else if (this.animationFrame === 1) {
+                sprite = ASSETS.birdMid;
+            } else {
+                sprite = ASSETS.birdUp;
+            }
+
+            // Draw the bird sprite, centered at the translated/rotated point
+            CTX.drawImage(sprite, -this.width / 2, -this.height / 2, this.width, this.height);
+            CTX.restore();
+            
+            // Note: Collision check still uses the simplified BIRD_X, bird.y, and BIRD_HITBOX_SIZE
+        },
+
+        update() {
+            // Apply gravity
+            this.velocity += GRAVITY;
+            this.velocity = Math.min(this.velocity, TERMINAL_VELOCITY);
+            this.y += this.velocity;
+
+            // Check for ground/ceiling collision
+            if (this.y + BIRD_HITBOX_SIZE >= HEIGHT - GROUND_HEIGHT || this.y <= 0) {
+                this.y = Math.min(this.y, HEIGHT - GROUND_HEIGHT - BIRD_HITBOX_SIZE);
+                gameOver();
+            }
+        },
+
+        flap() {
+            this.velocity = FLAP_VELOCITY;
+            playSound('flap');
+        }
+    };
+
+    // --- Pipes Array and Logic ---
+    let pipes = [];
+
+    const pipeLogic = {
+        // A simple function to generate a new pipe pair
+        spawn() {
+            // Random height for the top pipe
+            const minHeight = 50;
+            const maxHeight = HEIGHT - GROUND_HEIGHT - PIPE_GAP - 50;
+            const topPipeHeight = Math.floor(Math.random() * (maxHeight - minHeight) + minHeight);
+
+            pipes.push({
+                x: WIDTH,
+                height: topPipeHeight, // This is the height of the top pipe section (where the gap begins)
+                scored: false
+            });
+        },
+
+        draw() {
+            const pipeSprite = ASSETS.pipe;
+
+            pipes.forEach(p => {
+                // --- Top Pipe (Inverted) ---
+                CTX.save();
+                // 1. Translate origin to the pipe's base (p.x, p.height)
+                CTX.translate(p.x, p.height);
+                // 2. Flip vertically (scale Y by -1)
+                CTX.scale(1, -1);
+                // 3. Draw image, stretching to fit PIPE_WIDTH and p.height
+                // The drawing starts from the new origin (0, 0) and extends in the new 'upwards' direction.
+                CTX.drawImage(pipeSprite, 0, 0, PIPE_WIDTH, p.height);
+                CTX.restore();
+
+
+                // --- Bottom Pipe (Normal) ---
+                const bottomPipeY = p.height + PIPE_GAP;
+                const bottomPipeHeight = HEIGHT - GROUND_HEIGHT - bottomPipeY;
+                
+                // Draw image, starting from bottomPipeY downwards, stretching to fit.
+                CTX.drawImage(pipeSprite, p.x, bottomPipeY, PIPE_WIDTH, bottomPipeHeight);
+            });
+        },
+
+        update() {
+            // Move pipes
+            pipes.forEach(p => p.x -= PIPE_SPEED);
+
+            // Remove off-screen pipes
+            pipes = pipes.filter(p => p.x > -PIPE_WIDTH);
+
+            // Spawn new pipes
+            if (currentState === 'PLAYING' && frames % PIPE_SPAWN_INTERVAL === 0) {
+                this.spawn();
+            }
+
+            // Check for scoring
+            pipes.forEach(p => {
+                // Bird has passed the pipe's x position (check against simplified hitbox x)
+                if (!p.scored && p.x + PIPE_WIDTH < bird.x) {
+                    score++;
+                    p.scored = true;
+                    SCORE_DISPLAY.textContent = score;
+                    playSound('score');
+                }
+            });
+        }
+    };
+
+    // --- Game Functions ---
+
+    function checkCollision() {
+        // Use BIRD_HITBOX_SIZE for collision checks
+        for (let p of pipes) {
+            // Horizontal check: bird overlaps pipe
+            if (bird.x + BIRD_HITBOX_SIZE > p.x && bird.x < p.x + PIPE_WIDTH) {
+                const topPipeBottom = p.height;
+                const bottomPipeTop = p.height + PIPE_GAP;
+
+                // Vertical check: bird hits top pipe or bottom pipe
+                if (bird.y < topPipeBottom || bird.y + BIRD_HITBOX_SIZE > bottomPipeTop) {
+                    gameOver();
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function draw() {
+        // Draw background
+        CTX.drawImage(ASSETS.bg, 0, 0, WIDTH, HEIGHT);
+
+        // Draw pipes
+        pipeLogic.draw();
+
+        // Draw bird
+        bird.draw();
+
+        // Draw scrolling ground
+        const groundSprite = ASSETS.ground;
+        const repeatCount = Math.ceil(WIDTH / groundSprite.width) + 2; // +2 for smooth scrolling
+
+        // Calculate ground scrolling
+        if (currentState === 'PLAYING') {
+            groundX = (groundX - PIPE_SPEED) % groundSprite.width;
+        }
+        
+        // Tile the ground sprite
+        for (let i = 0; i < repeatCount; i++) {
+            CTX.drawImage(
+                groundSprite, 
+                groundX + i * groundSprite.width, 
+                HEIGHT - GROUND_HEIGHT, 
+                groundSprite.width, 
+                GROUND_HEIGHT
+            );
+        }
+    }
+
+    function update() {
+        if (currentState !== 'PLAYING') return;
+
+        frames++;
+        bird.update();
+        pipeLogic.update();
+        checkCollision();
+    }
+
+    function loop() {
+        update();
+        draw();
+        animationId = requestAnimationFrame(loop);
+    }
+
+    function startGame() {
+        if (currentState !== 'PLAYING') {
+            // Reset game state
+            bird.y = HEIGHT / 2 - BIRD_SPRITE_HEIGHT / 2;
+            bird.velocity = 0;
+            pipes = [];
+            score = 0;
+            frames = 0;
+            SCORE_DISPLAY.textContent = score;
+
+            currentState = 'PLAYING';
+            MESSAGE_BOX.classList.add('hidden');
+            
+            playSound('swoosh'); // Play swoosh sound on start
+
+            // Start the game loop
+            if (animationId) cancelAnimationFrame(animationId);
+            loop();
+        }
+    }
+
+    function gameOver() {
+        if (currentState !== 'OVER') {
+            playSound('hit');
+            // Give a slight delay before playing the 'die' sound for better effect
+            setTimeout(() => playSound('die'), 100); 
+            
+            currentState = 'OVER';
+            cancelAnimationFrame(animationId);
+
+            MESSAGE_BOX.querySelector('h2').textContent = `Game Over!`;
+            MESSAGE_BOX.querySelector('p').innerHTML = `Final Score: ${score}<br/>Click or tap to restart.`;
+            MESSAGE_BOX.classList.remove('hidden');
+        }
+    }
+
+    function handleInput() {
+        if (currentState === 'READY' || currentState === 'OVER') {
+            startGame();
+            bird.flap();
+        } else if (currentState === 'PLAYING') {
+            bird.flap();
+        }
+    }
+
+    // --- Event Listeners ---
+
+    // Mouse/Touch input
+    CANVAS.addEventListener('mousedown', handleInput);
+    CANVAS.addEventListener('touchstart', handleInput);
+    MESSAGE_BOX.addEventListener('click', handleInput);
+
+    // Keyboard input (Spacebar)
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' || e.key === ' ') {
+            e.preventDefault(); // Prevent scrolling
+            handleInput();
+        }
+    });
+
+    // Initial setup to display the 'Ready' message after assets load
+    window.onload = async () => {
+        // Display loading message
+        MESSAGE_BOX.querySelector('h2').textContent = "Loading...";
+        MESSAGE_BOX.querySelector('p').textContent = "Game assets loading...";
+        
+        await loadAssets();
+
+        // Transition to Ready state
+        MESSAGE_BOX.querySelector('h2').textContent = "Flappy Gemini";
+        MESSAGE_BOX.querySelector('p').innerHTML = "Click or tap to start and flap!";
+
+        currentState = 'READY';
+        
+        // Initial draw using loaded assets
+        draw(); 
+        console.log("Game Ready. Assets loaded and integrated.");
+    };
+
+</script>
+
+</body>
+</html>

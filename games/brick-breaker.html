@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arcade Brick Breaker</title>
+
+    <style>
+        /* CSS Variables for easy theme/style changes (Neo-Retro Arcade Theme) */
+        :root {
+            --canvas-width: 800px;
+            --canvas-height: 600px;
+            --bg-color: #0d0d0d;        /* Dark background */
+            --main-text-color: #00ff00; /* Bright green arcade text */
+            --ui-bg-color: #1a1a1a;     /* Darker UI elements */
+            --paddle-color: #f70a7b;    /* Hot pink paddle */
+            --ball-color: #ffcc00;      /* Bright yellow ball */
+            --game-over-color: #ff0000; /* Red for game over */
+        }
+
+        /* Global body styling */
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--main-text-color);
+            /* Center game content on the screen */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh; /* Full viewport height */
+        }
+
+        /* Container for the game canvas and HUD */
+        .game-container {
+            width: 90vw;
+            max-width: var(--canvas-width);
+            border: 6px solid var(--main-text-color);
+            background-color: var(--ui-bg-color);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 20px var(--main-text-color); /* Neon glow effect */
+        }
+
+        /* Game canvas styling */
+        #gameCanvas {
+            width: 100%; /* Make canvas responsive within container */
+            height: auto;
+            display: block;
+            background-color: #000000; /* Pure black game area */
+        }
+
+        /* Head-Up Display (HUD) for score and level */
+        .hud {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            font-weight: 700;
+            background-color: var(--ui-bg-color);
+            border-bottom: 2px solid var(--main-text-color);
+        }
+
+        /* Overlay for messages (start, pause, game over) */
+        .message-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85); /* Dark, semi-transparent background */
+            color: var(--main-text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            text-align: center;
+            opacity: 0;
+            pointer-events: none; /* Allows clicks/touches to pass through when hidden */
+            transition: opacity 0.4s ease-in-out;
+            z-index: 10;
+        }
+
+        /* Show the overlay */
+        .message-overlay.active {
+            opacity: 1;
+        }
+
+        /* Block input when a message is showing and requires interaction */
+        .message-overlay.blocking-input {
+            pointer-events: auto;
+        }
+
+        /* Style for the Start/Restart button */
+        .start-button {
+            margin-top: 25px;
+            padding: 12px 24px;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--ui-bg-color); /* Dark text */
+            background-color: var(--main-text-color); /* Bright green background */
+            border: 4px solid var(--main-text-color);
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--main-text-color);
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .start-button:hover {
+            background-color: #00cc00;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="game-container">
+        <div class="hud">
+            <div id="levelDisplay">LEVEL: 1</div>
+            <div id="scoreDisplay">SCORE: 0</div>
+        </div>
+
+        <div style="position: relative;">
+            <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+            <div id="messageOverlay" class="message-overlay active blocking-input">
+                <span class="initial-text">BRICK BREAKER ARCADE</span>
+                <span style="font-size: 1rem; font-weight: 400; margin-top: 15px;">
+                    (Desktop: Move mouse | Mobile: Tap and Drag)
+                </span>
+                <button class="start-button" id="startButton">START GAME</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- GAME CONSTANTS ---
+        const CANVAS_WIDTH = 800;
+        const CANVAS_HEIGHT = 600;
+        const BRICK_ROW_COUNT = 6;
+        const BRICK_COLUMN_COUNT = 10;
+        const PADDLE_HEIGHT = 15;
+        const PADDLE_WIDTH = 100;
+        const BALL_SIZE = 12;
+        const BRICK_PADDING = 10;
+        const BRICK_OFFSET_TOP = 40;
+        const BRICK_OFFSET_LEFT = 20;
+        const BRICK_COLORS = [
+            '#FF5733', // Red-Orange
+            '#33FF57', // Lime Green
+            '#3357FF', // Blue
+            '#FF33CC', // Pink
+            '#FFFF33', // Yellow
+            '#33FFFF'  // Cyan
+        ];
+
+        // --- GAME STATE VARIABLES ---
+        let gameCanvas;
+        let ctx;
+        let score = 0;
+        let level = 1;
+        let gamePaused = true;
+        let gameOver = false;
+        let animationFrameId = null; // Used to control the game loop
+        let isTouching = false; // For mobile touch input
+        let touchX = 0;
+
+        // --- GAME ELEMENTS (Objects) ---
+        let paddle = {
+            x: (CANVAS_WIDTH - PADDLE_WIDTH) / 2,
+            y: CANVAS_HEIGHT - PADDLE_HEIGHT - 10,
+            width: PADDLE_WIDTH,
+            height: PADDLE_HEIGHT,
+            color: '#f70a7b' // Hot pink from CSS var
+        };
+
+        let ball = {
+            x: CANVAS_WIDTH / 2,
+            y: paddle.y - BALL_SIZE,
+            dx: 4, // Delta X (speed in x direction)
+            dy: -4, // Delta Y (speed in y direction - negative for upwards)
+            size: BALL_SIZE,
+            color: '#ffcc00' // Bright yellow from CSS var
+        };
+
+        let bricks = []; // Array to hold the brick objects
+
+        // --- DOM ELEMENTS ---
+        let levelDisplay, scoreDisplay, messageOverlay, startButton;
+
+
+        // ===================================
+        // | INITIALIZATION & SETUP FUNCTIONS |
+        // ===================================
+
+        /**
+         * Initializes the canvas, context, DOM elements, and event listeners.
+         */
+        function init() {
+            // Get DOM elements
+            gameCanvas = document.getElementById('gameCanvas');
+            ctx = gameCanvas.getContext('2d');
+            levelDisplay = document.getElementById('levelDisplay');
+            scoreDisplay = document.getElementById('scoreDisplay');
+            messageOverlay = document.getElementById('messageOverlay');
+            startButton = document.getElementById('startButton');
+
+            // Setup
+            createBricks();
+            updateHUD();
+
+            // --- Event Listeners ---
+
+            // Desktop Input: Mouse Movement
+            gameCanvas.addEventListener('mousemove', (e) => {
+                calculatePaddlePosition(e.clientX);
+            });
+
+            // Mobile Input: Touch Start (for initial launch and movement)
+            gameCanvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                isTouching = true;
+                touchX = e.touches[0].clientX;
+                calculatePaddlePosition(touchX);
+
+                // Start the game on the first touch if paused
+                if (gamePaused && !gameOver) {
+                    gamePaused = false;
+                    hideMessage();
+                }
+            }, { passive: false }); // 'passive: false' is crucial for preventing default behavior like scrolling
+
+            // Mobile Input: Touch Move
+            gameCanvas.addEventListener('touchmove', (e) => {
+                if (isTouching) {
+                    e.preventDefault();
+                    touchX = e.touches[0].clientX;
+                    calculatePaddlePosition(touchX);
+                }
+            }, { passive: false });
+
+            // Mobile Input: Touch End
+            gameCanvas.addEventListener('touchend', () => { isTouching = false; });
+
+            // Desktop/Mobile Launch: Click/Tap anywhere on the canvas
+            gameCanvas.addEventListener('click', () => {
+                if (gamePaused && !gameOver) {
+                    gamePaused = false;
+                    hideMessage();
+                }
+            });
+
+            // Start/Restart Button Handler
+            startButton.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent click event from bubbling up to the canvas click listener
+                restartGame();
+            });
+        }
+
+        /**
+         * Generates the grid of bricks for the current level.
+         */
+        function createBricks() {
+            bricks = []; // Clear existing bricks
+            const brickWidth = (CANVAS_WIDTH - (BRICK_COLUMN_COUNT + 1) * BRICK_PADDING - 2 * BRICK_OFFSET_LEFT) / BRICK_COLUMN_COUNT;
+            const brickHeight = 20;
+
+            for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+                bricks[c] = [];
+                for (let r = 0; r < BRICK_ROW_COUNT; r++) {
+                    const density = 0.8;
+                    // Randomly place bricks (adds variety to the layout)
+                    if (Math.random() < density && ((r + c + level) % 3 !== 0)) {
+                        const x = BRICK_OFFSET_LEFT + (c * (brickWidth + BRICK_PADDING));
+                        const y = BRICK_OFFSET_TOP + (r * (brickHeight + BRICK_PADDING));
+                        const colorIndex = (r + level) % BRICK_COLORS.length;
+
+                        bricks[c][r] = {
+                            x: x,
+                            y: y,
+                            width: brickWidth,
+                            height: brickHeight,
+                            color: BRICK_COLORS[colorIndex],
+                            status: 1 // 1 means brick is present
+                        };
+                    } else {
+                        // Empty space
+                        bricks[c][r] = { status: 0 };
+                    }
+                }
+            }
+        }
+
+        /**
+         * Resets the ball and paddle positions for a new life or level.
+         */
+        function resetGameElements() {
+            gamePaused = true;
+            paddle.x = (CANVAS_WIDTH - PADDLE_WIDTH) / 2;
+            ball.x = paddle.x + paddle.width / 2; // Ball centers on paddle
+            ball.y = paddle.y - BALL_SIZE; // Ball sits just above paddle
+            ball.dx = 4;
+            ball.dy = -4; // Starts moving up
+            showMessage("READY? Move Paddle, Click or Tap to Launch!", false);
+        }
+
+        /**
+         * Fully restarts the game state to Level 1.
+         */
+        function restartGame() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+
+            gameOver = false;
+            score = 0;
+            level = 1;
+
+            createBricks();
+            updateHUD();
+            resetGameElements();
+
+            // Initial draw before the loop starts
+            drawBricks();
+            drawPaddle();
+            drawBall();
+
+            // Start the main game loop
+            gameLoop();
+        }
+
+        /**
+         * Ends the game and shows the final score.
+         */
+        function endGame() {
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+            gameOver = true;
+            showMessage(`GAME OVER! Final Score: ${score}`, true, true);
+        }
+
+        /**
+         * Moves to the next level, increasing the level counter and creating new bricks.
+         */
+        function nextLevel() {
+            level++;
+            createBricks();
+            resetGameElements();
+        }
+
+
+        // ========================
+        // | UI & MESSAGE FUNCTIONS |
+        // ========================
+
+        /**
+         * Updates the score and level displays in the HUD.
+         */
+        function updateHUD() {
+            scoreDisplay.textContent = `SCORE: ${score}`;
+            levelDisplay.textContent = `LEVEL: ${level}`;
+        }
+
+        /**
+         * Shows the message overlay with custom text and optional button.
+         * @param {string} messageHtml - The HTML content for the message.
+         * @param {boolean} showStartButton - If true, displays the start button.
+         */
+        function showMessage(messageHtml, showStartButton = false) {
+            const messageSpan = messageOverlay.querySelector(".initial-text");
+            messageSpan.innerHTML = messageHtml;
+            startButton.style.display = showStartButton ? "block" : "none";
+            messageOverlay.classList.toggle("blocking-input", showStartButton);
+            messageOverlay.classList.add("active");
+        }
+
+        /**
+         * Hides the message overlay.
+         */
+        function hideMessage() {
+            messageOverlay.classList.remove("active");
+        }
+
+
+        // ========================
+        // | DRAWING FUNCTIONS |
+        // ========================
+
+        /**
+         * Clears the entire canvas for the next frame.
+         */
+        function clearCanvas() {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        }
+
+        /**
+         * Draws the paddle on the canvas.
+         */
+        function drawPaddle() {
+            ctx.beginPath();
+            ctx.rect(paddle.x, paddle.y, paddle.width, paddle.height);
+            ctx.fillStyle = paddle.color;
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        /**
+         * Draws the ball on the canvas (using a rectangle to match the style of the bricks).
+         */
+        function drawBall() {
+            ctx.beginPath();
+            // Ball coordinates are centered, so we adjust for drawing a square
+            ctx.rect(ball.x - ball.size / 2, ball.y - ball.size / 2, ball.size, ball.size);
+            ctx.fillStyle = ball.color;
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        /**
+         * Draws all visible bricks on the canvas.
+         */
+        function drawBricks() {
+            for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+                for (let r = 0; r < BRICK_ROW_COUNT; r++) {
+                    const b = bricks[c][r];
+                    if (b.status === 1) { // Only draw if the brick is active
+                        ctx.beginPath();
+                        ctx.rect(b.x, b.y, b.width, b.height);
+                        ctx.fillStyle = b.color;
+                        ctx.fill();
+                        ctx.closePath();
+                    }
+                }
+            }
+        }
+
+
+        // ========================
+        // | GAME LOGIC FUNCTIONS |
+        // ========================
+
+        /**
+         * Checks for collision between the ball and any active brick.
+         */
+        function collisionDetection() {
+            let allBroken = true;
+
+            for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+                for (let r = 0; r < BRICK_ROW_COUNT; r++) {
+                    const b = bricks[c][r];
+
+                    if (b.status === 1) {
+                        allBroken = false; // Found an unbroken brick
+
+                        // Calculate ball boundaries
+                        const ballLeft = ball.x - ball.size / 2;
+                        const ballRight = ball.x + ball.size / 2;
+                        const ballTop = ball.y - ball.size / 2;
+                        const ballBottom = ball.y + ball.size / 2;
+
+                        // Check for AABB (Axis-Aligned Bounding Box) collision
+                        if (
+                            ballRight > b.x &&
+                            ballLeft < b.x + b.width &&
+                            ballBottom > b.y &&
+                            ballTop < b.y + b.height
+                        ) {
+                            // Collision detected!
+                            ball.dy = -ball.dy; // Reverse vertical direction
+                            b.status = 0;      // Mark brick as broken
+                            score++;           // Increase score
+                            updateHUD();
+                        }
+                    }
+                }
+            }
+
+            // Check for level completion
+            if (allBroken) {
+                nextLevel();
+            }
+        }
+
+        /**
+         * Updates the ball's position and handles collisions with walls and the paddle.
+         */
+        function moveBall() {
+            // Update ball position
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+
+            // Wall Collision: Left/Right
+            if (ball.x + ball.size / 2 > CANVAS_WIDTH || ball.x - ball.size / 2 < 0) {
+                ball.dx = -ball.dx;
+            }
+
+            // Wall Collision: Top
+            if (ball.y - ball.size / 2 < 0) {
+                ball.dy = -ball.dy;
+            }
+
+            // Wall Collision: Bottom (Game Over)
+            if (ball.y + ball.size / 2 > CANVAS_HEIGHT) {
+                endGame();
+                return;
+            }
+
+            // Paddle Collision
+            if (
+                ball.x + ball.size / 2 > paddle.x &&
+                ball.x - ball.size / 2 < paddle.x + paddle.width &&
+                ball.y + ball.size / 2 > paddle.y && // Ball's bottom passes paddle's top
+                ball.y - ball.size / 2 < paddle.y + paddle.height // Ball's top hasn't passed paddle's bottom
+            ) {
+                // Only bounce if the ball is moving down
+                if (ball.dy > 0) {
+                    ball.dy = -ball.dy;
+
+                    // Calculate spin/angle based on where the ball hit the paddle
+                    // hitPoint: -width/2 (left edge) to +width/2 (right edge)
+                    const hitPoint = ball.x - (paddle.x + paddle.width / 2);
+
+                    // Adjust ball.dx based on hit location
+                    // Multiplier of 1.5 increases the potential maximum x speed
+                    ball.dx = hitPoint * (5 / (paddle.width / 2)) * 1.5;
+                }
+            }
+        }
+
+        /**
+         * Calculates the paddle's x-position based on mouse/touch clientX.
+         * @param {number} clientX - The x-coordinate of the mouse/touch event on the screen.
+         */
+        function calculatePaddlePosition(clientX) {
+            // Get the position and size of the canvas on the screen
+            const rect = gameCanvas.getBoundingClientRect();
+            // Calculate the x-coordinate relative to the canvas
+            const relativeX = clientX - rect.left;
+            // Scale the relative X to the canvas's drawing resolution (800px)
+            const scaleFactor = CANVAS_WIDTH / rect.width;
+            const canvasX = relativeX * scaleFactor;
+
+            // Calculate the new paddle position (centered on the mouse/touch point)
+            let newPaddleX = canvasX - paddle.width / 2;
+
+            // Boundary checking
+            if (newPaddleX < 0) newPaddleX = 0;
+            else if (newPaddleX + paddle.width > CANVAS_WIDTH) newPaddleX = CANVAS_WIDTH - paddle.width;
+
+            // Apply the new position
+            paddle.x = newPaddleX;
+
+            // If game is paused, keep the ball centered on the paddle
+            if (gamePaused) {
+                ball.x = paddle.x + paddle.width / 2;
+            }
+        }
+
+        /**
+         * The main game loop function, called by requestAnimationFrame.
+         */
+        function gameLoop() {
+            if (gameOver) return;
+
+            // 1. Draw
+            clearCanvas();
+            drawBricks();
+            drawPaddle();
+            drawBall();
+
+            // 2. Update (only if not paused)
+            if (!gamePaused) {
+                moveBall();
+                collisionDetection();
+            }
+
+            // 3. Loop (call next frame)
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+
+        // ========================
+        // | WINDOW ENTRY POINT |
+        // ========================
+
+        /**
+         * Start the game initialization once the entire window has loaded.
+         */
+        window.onload = function() {
+            init();
+            // Show the initial start message
+            showMessage("BRICK BREAKER ARCADE", true);
+        };
+    </script>
+</body>
+</html>
