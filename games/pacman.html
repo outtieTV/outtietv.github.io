@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Square Pac-Man</title>
+<style>
+  :root{--bg:#000;--walls:#0f3b6b;--pac:#ffd166;--dot:#ffe3a7;--power:#ff6b6b;--ghosts:#61dafb}
+  html,body{height:100%;margin:0;background:var(--bg);display:flex;align-items:center;justify-content:center;font-family:Inter,system-ui,Segoe UI,Roboto}
+  canvas{image-rendering:pixelated;border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,0.6)}
+  .game-container{position:relative;} /* Wrapper for HUD elements */
+
+  /* HUD Styles */
+  .hud-container{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;color:#fff;text-shadow:1px 1px 2px #000;}
+  .top-left, .top-right, .bottom-center{position:absolute;padding:10px;font-size:20px;font-weight:bold;display:flex;align-items:center;}
+  .top-left{top:0;left:0;}
+  .top-right{top:0;right:0;}
+  .bottom-center{bottom:0;left:50%;transform:translateX(-50%);}
+  .heart-icon{color:#ff4d4d;margin:0 2px;font-size:24px;} /* Use a character heart for simplicity */
+
+  /* Overlay for Pause/Ready/Continue */
+  .overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;z-index:10;transition:opacity 0.3s;}
+  .overlay button{background:#0b6b4f;color:#fff;padding:10px 20px;border-radius:8px;border:0;cursor:pointer;font-size:24px;}
+  .hidden{display:none;opacity:0;}
+
+  /* General button styles for the main panel (kept from original) */
+  .panel{color:#fff;width:260px;margin-left:18px;}
+  h1{font-size:16px;margin:0 0 8px}
+  .muted{opacity:0.8;font-size:13px}
+</style>
+</head>
+<body>
+<div class="game-container">
+  <canvas id="game" width="400" height="380"></canvas>
+  <div id="game-overlay" class="overlay">
+    <button id="ready-up-btn">Ready?</button>
+    <button id="continue-btn" class="hidden">Continue</button>
+  </div>
+  <div class="hud-container">
+    <div class="top-left">Level: <span id="level-counter">1</span></div>
+    <div class="top-right">Score: <span id="point-counter">0</span></div>
+    <div class="bottom-center" id="heart-counter">
+      <span class="heart-icon">♥</span>
+      <span class="heart-icon">♥</span>
+      <span class="heart-icon">♥</span>
+    </div>
+  </div>
+</div>
+<div class="panel">
+  <h1>Square Pac-Man</h1>
+  <div style="margin-top:12px;display:flex;gap:8px">
+    <div class="muted">Press 'Ready?' to start. Press 'Continue' if you die.</div>
+  </div>
+</div>
+<script>
+// --- MAP DEFINITIONS ---
+const LEVEL_MAPS = [
+    // Level 1: Maze
+    [
+        "11111111111111111111",
+        "1OPPPPPP2222PPPPPO1",
+        "1P22222P2222P22222P1",
+        "1P22222P2222P22222P1",
+        "1PPPPPPPPPPPPPPPPPP1",
+        "1P222P222P P2222P222P1",
+        "1P222P222P P2222P222P1",
+        "1PPP22PPPPPP22PPPP1",
+        "1PPP2222202222PPPP1", // <-- GATE OPENING (0) at [8, 10]
+        "1PPP22PQW000P22PPPP1",
+        "1PPP22PER000P22PPPP1",
+        "1PPP22P00000P22PPPP1",
+        "1PPP2222PPP2222PPPP1",
+        "1P222P22222222P222P1",
+        "1P222P22222222P222P1",
+        "1PPPPPPPPPPPPPPPPPP1",
+        "1P22222P2222P22222P1",
+        "1OPPPPPPP2222PPPPPO1",
+        "11111111111111111111"
+    ],
+    // Level 2: Opened Gate at R8, C10 (example of a different level)
+    [
+        "11111111111111111111",
+        "1OPPPPPPPPPPPPPPPP O1",
+        "1P2222222222222222P1",
+        "1P2222222222222222P1",
+        "1PPPPP22222222PPPPP1",
+        "1P222P22222222P222P1",
+        "1P222P22222222P222P1",
+        "1PPPPPP2222PPPPPPP1",
+        "1PPP22222022222PPPP1",
+        "1PPP22PQW000P22PPPP1",
+        "1PPP22PER000P22PPPP1",
+        "1PPP22P00000P22PPPP1",
+        "1PPP22222222222PPPP1",
+        "1PPPPPP2222PPPPPPP1",
+        "1P222P22222222P222P1",
+        "1P222P22222222P222P1",
+        "1PPPPP22222222PPPPP1",
+        "1OPPPPPPPPPPPPPPPP O1",
+        "11111111111111111111"
+    ],
+	[
+            "11111111111111111111",
+            "1OPPP22222222PPP O1",
+            "1P222P22222222P222P1",
+            "1P222P22222222P222P1",
+            "1PPPPP22222222PPPPP1",
+            "1P222P22222222P222P1",
+            "1P222P22222222P222P1",
+            "1PPPPPPP222PPPPPPPP1",
+            "1PPP22222022222PPPP1", // <-- GATE OPENING (0) at [8, 10]
+            "1PPP22PQW000P22PPPP1",
+            "1PPP22PER000P22PPPP1",
+            "1PPP22P00000P22PPPP1",
+            "1PPP22222222222PPPP1",
+            "1PPPPPPP222PPPPPPPP1",
+            "1P222P22222222P222P1",
+            "1P222P22222222P222P1",
+            "1PPPPP22222222PPPPP1",
+            "1OPPP22222222PPP O1",
+            "11111111111111111111"
+        ]
+];
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// UI Elements
+const scoreEl = document.getElementById('point-counter');
+const heartCounterEl = document.getElementById('heart-counter');
+const levelCounterEl = document.getElementById('level-counter');
+const overlayEl = document.getElementById('game-overlay');
+const readyBtn = document.getElementById('ready-up-btn');
+const continueBtn = document.getElementById('continue-btn');
+
+const TILE = 20; // px
+const COLS = 20; // Matches new map width
+const ROWS = 19; // Matches new map height
+const WIDTH = COLS * TILE;
+const HEIGHT = ROWS * TILE;
+canvas.width = WIDTH; canvas.height = HEIGHT;
+
+let map = [];
+let totalPellets = 0; // To track progress for level up
+
+// Entities
+const PACMAN_START = {x: 10, y: 15}; // Adjusted to fit new map
+const GHOST_STARTS = [{x: 9, y: 9}, {x: 10, y: 9}, {x: 9, y: 10}, {x: 10, y: 10}]; // Q, W, E, R positions
+const player = {x:0, y:0, dir:{x:0,y:0}, nextDir:{x:0,y:0}, speed:0.12, radius:TILE*0.45, mouth:0.3};
+const ghosts = [];
+const ghostColors = ['#ff0000','#ffb8ff','#00ffff','#ffb852']; // Red, Pink, Cyan, Orange
+
+let score = 0;
+let lives = 3;
+let currentLevel = 0;
+let running = false; // Game logic is running
+let paused = true; // Game is paused (start, game over, continue)
+
+let frightenedTimer = 0;
+
+// --- UTILITY FUNCTIONS FOR PATHING ---
+
+const ALIGN_TOLERANCE = 0.05; // Maximum distance (in tiles) from the center to be considered aligned
+
+/**
+ * Checks if a floating-point coordinate (x, y) is centered on a grid tile.
+ * @param {number} x - The x coordinate in tiles.
+ * @param {number} y - The y coordinate in tiles.
+ * @returns {boolean} True if the entity is centered.
+ */
+function isCentered(x, y) {
+  const isXCentered = Math.abs(x - Math.floor(x + 0.5)) < ALIGN_TOLERANCE;
+  const isYCentered = Math.abs(y - Math.floor(y + 0.5)) < ALIGN_TOLERANCE;
+  return isXCentered && isYCentered;
+}
+
+/**
+ * Returns the map value at the given tile coordinates.
+ * @param {number} x - Tile column index.
+ * @param {number} y - Tile row index.
+ * @returns {number} The tile value (1=wall, 0=path, 2=pellet, 3=power pellet).
+ */
+function tileAt(x, y) {
+  const c = Math.floor(x), r = Math.floor(y); 
+  if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return 1; // Treat out of bounds as wall
+  return map[r][c];
+}
+
+/**
+ * Checks if a specific tile coordinate is a walkable path (0, 2, or 3).
+ * @param {number} x - Tile column index.
+ * @param {number} y - Tile row index.
+ * @returns {boolean} True if the tile is not a wall.
+ */
+function canMove(x, y) {
+  const v = tileAt(x, y);
+  // Walkable if it's empty path (0), pellet (2), or power pellet (3)
+  return (v === 0 || v === 2 || v === 3);
+}
+
+// --- GAME SETUP & MAP LOGIC ---
+
+function loadLevel(levelIndex) {
+  const levelMap = LEVEL_MAPS[levelIndex % LEVEL_MAPS.length];
+  map = levelMap.map(row => row.split('').map(char => {
+    switch(char) {
+      case '1': return 1; // Border Wall
+      case '2': return 1; // Inner Wall (solid wall)
+      case 'P': return 2; // Pellet
+      case 'O': return 3; // Power Pellet
+      case '0': return 0; // Path/Gate
+      case 'Q': case 'W': case 'E': case 'R': return 0; // Ghost spawn tiles
+      case ' ': return 0; // Empty path
+      default: return 0;
+    }
+  }));
+
+  totalPellets = map.flat().filter(v => v === 2 || v === 3).length;
+}
+
+function createGhosts() {
+  ghosts.length = 0;
+  GHOST_STARTS.forEach((start, i) => {
+    ghosts.push({
+      x: start.x, y: start.y,
+      dir: {x: 0, y: 0},
+      speed: 0.09 + i * 0.01,
+      state: 'scatter',
+      color: ghostColors[i],
+      fright: false
+    });
+  });
+}
+
+function resetGame() {
+  currentLevel = 0;
+  score = 0;
+  lives = 3;
+  resetLevel();
+  showOverlay('ready');
+}
+
+function resetLevel(newLevel = false) {
+  if (newLevel) {
+    currentLevel++;
+  }
+  loadLevel(currentLevel);
+  createGhosts();
+
+  // Reset Pac-Man Position (snap to center)
+  player.x = PACMAN_START.x; 
+  player.y = PACMAN_START.y;
+  player.dir = {x: 0, y: 0};
+  player.nextDir = {x: 0, y: 0};
+
+  frightenedTimer = 0;
+
+  // Recalculate pellet count after reset (and ensure Pac-Man's spawn tile is empty)
+  totalPellets = 0;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (map[r][c] === 2 || map[r][c] === 3) {
+        totalPellets++;
+      }
+    }
+  }
+  map[Math.floor(player.y)][Math.floor(player.x)] = 0; // Ensure spawn is clear
+  
+  setUI();
+}
+
+
+function setUI() {
+  scoreEl.textContent = score;
+  levelCounterEl.textContent = currentLevel + 1;
+  // Update heart counter
+  heartCounterEl.innerHTML = Array(lives).fill('<span class="heart-icon">♥</span>').join('');
+}
+
+function showOverlay(state) {
+  paused = true;
+  overlayEl.classList.remove('hidden');
+  readyBtn.classList.add('hidden');
+  continueBtn.classList.add('hidden');
+
+  if (state === 'ready') {
+    readyBtn.classList.remove('hidden');
+  } else if (state === 'continue') {
+    continueBtn.textContent = 'Continue';
+    continueBtn.classList.remove('hidden');
+  } else if (state === 'game-over') {
+    continueBtn.textContent = 'Game Over. Restart?';
+    continueBtn.classList.remove('hidden');
+  }
+}
+
+function hideOverlay() {
+  paused = false;
+  overlayEl.classList.add('hidden');
+}
+
+// --- CONTROLS ---
+
+readyBtn.onclick = () => {
+  if (!running) { // First start
+    running = true;
+    resetGame();
+  }
+  resetLevel();
+  hideOverlay();
+};
+
+continueBtn.onclick = () => {
+  if (lives > 0) {
+    resetLevel(false); 
+    hideOverlay();
+  } else {
+    resetGame();
+  }
+};
+
+window.addEventListener('keydown', e => {
+  if (!running || paused) return;
+  if (e.key.includes('Arrow')) {
+    const d = {ArrowLeft: {x: -1, y: 0}, ArrowRight: {x: 1, y: 0}, ArrowUp: {x: 0, y: -1}, ArrowDown: {x: 0, y: 1}}[e.key];
+    player.nextDir = d;
+  }
+});
+
+function canMoveBox(nx, ny) {
+  const half = 0.45; // half the square size in tile units (TILE*0.9 / TILE / 2)
+
+  const left   = nx - half;
+  const right  = nx + half;
+  const top    = ny - half;
+  const bottom = ny + half;
+
+  // Round to nearest tile index for corners
+  const corners = [
+    {x: Math.floor(left  + 0.5), y: Math.floor(top    + 0.5)},
+    {x: Math.floor(right + 0.5), y: Math.floor(top    + 0.5)},
+    {x: Math.floor(left  + 0.5), y: Math.floor(bottom + 0.5)},
+    {x: Math.floor(right + 0.5), y: Math.floor(bottom + 0.5)}
+  ];
+
+  return corners.every(c => canMove(c.x, c.y));
+}
+
+
+const keysHeld = { left:false, right:false, up:false, down:false };
+
+window.addEventListener("keydown", e => {
+  if (!running || paused) return;
+  if (e.key === "ArrowLeft") keysHeld.left = true;
+  if (e.key === "ArrowRight") keysHeld.right = true;
+  if (e.key === "ArrowUp") keysHeld.up = true;
+  if (e.key === "ArrowDown") keysHeld.down = true;
+});
+
+window.addEventListener("keyup", e => {
+  if (e.key === "ArrowLeft") keysHeld.left = false;
+  if (e.key === "ArrowRight") keysHeld.right = false;
+  if (e.key === "ArrowUp") keysHeld.up = false;
+  if (e.key === "ArrowDown") keysHeld.down = false;
+});
+
+function getHeldDir() {
+  if (keysHeld.left) return {x:-1, y:0};
+  if (keysHeld.right) return {x:1, y:0};
+  if (keysHeld.up) return {x:0, y:-1};
+  if (keysHeld.down) return {x:0, y:1};
+  return null;
+}
+
+// --- GAME LOGIC UPDATE ---
+// Collision check for a square box instead of a single point
+function updatePlayer(delta) {
+  const speed = player.speed * 24;
+  const TOL = 0.3;
+
+  const cx = Math.floor(player.x + 0.5);
+  const cy = Math.floor(player.y + 0.5);
+
+  // Update buffered direction from held keys
+  const held = getHeldDir();
+  if (held) player.nextDir = held;
+
+  // Try to turn
+  if (player.nextDir.x || player.nextDir.y) {
+    const d = player.nextDir;
+    const tx = cx + d.x;
+    const ty = cy + d.y;
+
+    if (canMove(tx, ty)) {
+      const dx = Math.abs(player.x - cx);
+      const dy = Math.abs(player.y - cy);
+
+      if ((d.x !== 0 && dy < TOL) || (d.y !== 0 && dx < TOL)) {
+        player.x = cx;
+        player.y = cy;
+        player.dir = d;
+        // ❌ don’t clear nextDir — keeps reusing while key held
+      }
+    }
+  }
+
+  // Move forward
+  const nx = player.x + player.dir.x * speed * delta;
+  const ny = player.y + player.dir.y * speed * delta;
+
+  if (player.dir.x !== 0) {
+    if (canMoveBox(nx, player.y)) player.x = nx;
+    else {
+      player.x = cx;
+      player.dir.x = 0;
+    }
+  }
+
+  if (player.dir.y !== 0) {
+    if (canMoveBox(player.x, ny)) player.y = ny;
+    else {
+      player.y = cy;
+      player.dir.y = 0;
+    }
+  }
+}
+
+function findPath(sx, sy, tx, ty) {
+  const visited = Array.from({length: ROWS}, () => Array(COLS).fill(false));
+  const queue = [{x: sx, y: sy, path: []}];
+  visited[sy][sx] = true;
+
+  while (queue.length > 0) {
+    const {x, y, path} = queue.shift();
+    if (x === tx && y === ty) return path;
+
+    for (const d of [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}]) {
+      const nx = x + d.x;
+      const ny = y + d.y;
+      if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && !visited[ny][nx] && canMove(nx, ny)) {
+        visited[ny][nx] = true;
+        queue.push({x: nx, y: ny, path: [...path, d]});
+      }
+    }
+  }
+  return []; // no path
+}
+
+
+
+// --- Ghost personality chasing ---
+function updateGhost(g, i, delta) {
+  const sp = g.speed * 24;
+
+  // Work in tile coordinates
+  const cx = Math.floor(g.x + 0.5);
+  const cy = Math.floor(g.y + 0.5);
+  const px = Math.floor(player.x + 0.5);
+  const py = Math.floor(player.y + 0.5);
+
+  // Pick target based on ghost personality
+  let target = {x: px, y: py};
+  if (!g.fright) {
+    switch (i) {
+      case 0: // Blinky (red)
+        target = {x: px, y: py};
+        break;
+      case 1: // Pinky (pink)
+        target = {x: px + player.dir.x * 4, y: py + player.dir.y * 4};
+        break;
+      case 2: // Inky (cyan)
+        const blinky = ghosts[0];
+        const vx = px - Math.floor(blinky.x + 0.5);
+        const vy = py - Math.floor(blinky.y + 0.5);
+        target = {x: px + vx * 2, y: py + vy * 2};
+        break;
+      case 3: // Clyde (orange)
+        const dist = Math.hypot(g.x - player.x, g.y - player.y);
+        target = dist > 6 ? {x: px, y: py} : {x: 1, y: ROWS - 2};
+        break;
+    }
+  } else {
+    // Frightened: scatter randomly
+    target = {x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS)};
+  }
+
+  // If centered, decide new direction using pathfinding
+  if (isCentered(g.x, g.y)) {
+    const path = findPath(cx, cy, target.x, target.y);
+    if (path.length > 0) {
+      g.dir = path[0]; // take first step in path
+    }
+  }
+
+  // Move forward
+  const nx = g.x + g.dir.x * sp * delta;
+  const ny = g.y + g.dir.y * sp * delta;
+
+  if (canMoveBox(nx, g.y)) g.x = nx;
+  if (canMoveBox(g.x, ny)) g.y = ny;
+}
+
+
+function update(dt) {
+  const delta = dt * 0.001;
+
+  // 1. Player Movement and Pellet Eating
+  const speed = player.speed * 24;
+  
+  // Check for direction change (only allow turns when centered)
+  if (player.nextDir.x !== 0 || player.nextDir.y !== 0) {
+    if (isCentered(player.x, player.y)) {
+      const d = player.nextDir;
+      // Check the tile in the desired direction
+      const nextTileX = Math.floor(player.x + 0.5) + d.x;
+      const nextTileY = Math.floor(player.y + 0.5) + d.y;
+
+      if (canMove(nextTileX, nextTileY)) {
+        player.dir = d;
+        // Snap to center on turn to prevent drift
+        player.x = Math.floor(player.x + 0.5);
+        player.y = Math.floor(player.y + 0.5);
+      }
+      player.nextDir = {x:0, y:0}; // Attempt was made, clear buffer
+    }
+  }
+
+  // Move player
+  const targetX = player.x + player.dir.x * speed * delta;
+  const targetY = player.y + player.dir.y * speed * delta;
+  
+  // Check wall collision: only move if the next position is valid
+  if (canMove(targetX + player.dir.x * 0.2, player.y)) player.x = targetX;
+  else if (player.dir.x !== 0) player.dir.x = 0; // Stop movement if blocked
+
+  if (canMove(player.x, targetY + player.dir.y * 0.2)) player.y = targetY;
+  else if (player.dir.y !== 0) player.dir.y = 0; // Stop movement if blocked
+
+  // Eat dots/pellets
+  const pr = Math.floor(player.y), pc = Math.floor(player.x);
+  if (map[pr] && (map[pr][pc] === 2 || map[pr][pc] === 3)) {
+    if (map[pr][pc] === 2) score += 1; // Pellet: +1 point
+    if (map[pr][pc] === 3) {
+      score += 10; // Power Pellet: +10 points
+      frightenedTimer = 8;
+      ghosts.forEach(g => {
+        g.fright = true;
+        g.state = 'frightened';
+      });
+    }
+    map[pr][pc] = 0;
+    totalPellets--;
+    setUI();
+  }
+
+  // 2. Ghost Update & Movement
+  frightenedTimer = Math.max(0, frightenedTimer - delta);
+  if (frightenedTimer <= 0) ghosts.forEach(g => {
+    g.fright = false;
+    if (g.state !== 'eaten') g.state = 'scatter';
+  });
+  
+  ghosts.forEach((g,i) => updateGhost(g,i,delta));
+  updatePlayer(delta);
+
+
+	// --- 3. Collision Check ---
+	const COLLISION_THRESHOLD = 0.8; // Distance in tiles
+
+	for (let i = 0; i < ghosts.length; i++) {
+		const g = ghosts[i];
+		const dist = Math.hypot(g.x - player.x, g.y - player.y);
+
+		if (dist < COLLISION_THRESHOLD) {
+			if (g.fright) {
+				// PAC-MAN EATS GHOST
+				score += 20; 
+				
+				// Reset ghost to start house
+				const start = GHOST_STARTS[i];
+				g.x = start.x;
+				g.y = start.y;
+				g.dir = {x: 0, y: 0};
+				g.fright = false; // Immediately no longer edible
+				g.state = 'eaten';
+				
+				setUI();
+			} else {
+				// GHOST EATS PAC-MAN
+				lives--;
+				setUI();
+				
+				// Pause the game and handle life/game over
+				if (lives <= 0) {
+					showOverlay('game-over');
+				} else {
+					showOverlay('continue');
+				}
+				return; // Stop processing this frame after Pac-Man dies
+			}
+		}
+	}
+
+  // 4. Level Up Check
+  if (totalPellets <= 0) {
+    resetLevel(true); // Loads the next level and resets everything
+  }
+}
+
+// --- DRAWING LOGIC (Unchanged) ---
+
+function draw() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  // Draw Map
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const v = map[r][c];
+      const x = c * TILE, y = r * TILE;
+		if (v === 2) { // Pellet
+		  ctx.fillStyle = '#ffe3a7';
+		  ctx.fillRect(x + TILE / 2 - 2, y + TILE / 2 - 2, 4, 4);
+		} else if (v === 3) { // Power Pellet
+		  ctx.fillStyle = '#ff6b6b';
+		  ctx.fillRect(x + TILE / 4, y + TILE / 4, TILE / 2, TILE / 2);
+		} else if (v === 1) { // Wall
+		  ctx.fillStyle = '#0f3b6b';
+		  ctx.fillRect(x, y, TILE, TILE);
+		} else if (v === 0) {
+		}
+    }
+  }
+
+  // Draw Player (Square Pac-Man)
+	ctx.beginPath();
+    const rectW = TILE * 0.5;
+    const rectH = TILE * 0.5;
+    const px = player.x * TILE + TILE / 2 - rectW / 2;
+    const py = player.y * TILE + TILE / 2 - rectH / 2;
+
+    ctx.fillStyle = 'yellow';
+    ctx.fillRect(px, py, rectW, rectH);
+
+
+  // Draw Ghosts (Rectangle Ghosts)
+  ghosts.forEach(g => {
+    const gx = g.x * TILE, gy = g.y * TILE;
+    const rectW = TILE * 0.9;
+    const rectH = TILE * 0.9;
+    
+    // Frightened ghosts are blue/white flashing
+    if (g.fright && (frightenedTimer > 2 || Math.floor(frightenedTimer * 10) % 2 === 0)) {
+      ctx.fillStyle = '#87cefa'; // Light Blue
+    } else if (g.fright && frightenedTimer <= 2) {
+      ctx.fillStyle = Math.floor(frightenedTimer * 10) % 2 === 0 ? '#87cefa' : '#ffffff'; // Flashing blue/white
+    } else {
+      ctx.fillStyle = g.color; // Normal color
+    }
+    
+    // Draw ghost body centered at the continuous x,y
+    ctx.fillRect(gx + TILE/2 - rectW/2, gy + TILE/2 - rectH/2, rectW, rectH);
+
+    // Eyes (simplified square eyes)
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(gx + TILE * 0.15, gy + TILE * 0.2, TILE * 0.3, TILE * 0.3);
+    ctx.fillRect(gx + TILE * 0.55, gy + TILE * 0.2, TILE * 0.3, TILE * 0.3);
+  });
+}
+
+// --- MAIN LOOP ---
+
+let last = performance.now();
+function loop(now) {
+  const dt = (now - last);
+  last = now;
+  if (running && !paused) {
+    update(dt);
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// Initial setup
+resetGame();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
