@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arcade Pong Master</title>
+    <!-- Load Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Inter and an arcade-style font for high impact -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Press+Start+2P&display=swap');
+        :root {
+            --primary-color: #f97316; /* Orange 600 - P1 (Used for UI elements) */
+            --secondary-color: #10b981; /* Emerald 500 - P2/AI (Used for UI elements) */
+            --bg-color: #0f172a; /* Slate 900 */
+            --text-color: #f1f5f9; /* Slate 100 */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+            /* Prevents selection during rapid clicking/swiping */
+            user-select: none; 
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        .pong-container {
+            width: 100%;
+            max-width: 800px;
+            background-color: #1e293b; /* Slate 800 */
+            border-radius: 1.5rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+            padding: 1.5rem;
+        }
+        canvas {
+            border: 2px solid var(--secondary-color);
+            border-radius: 0.5rem;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+        }
+        .start-button {
+            transition: all 0.15s ease-in-out;
+            font-family: 'Press+Start+2P', cursive;
+        }
+        .start-button:active {
+            transform: scale(0.98);
+        }
+        .start-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+        }
+        .score-display {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 1.25rem;
+            line-height: 1.75rem;
+        }
+        .title-font {
+            font-family: 'Press Start 2P', cursive;
+        }
+        /* Canvas custom background for game area */
+        #pongCanvas {
+            background-color: rgba(15, 23, 42, 0.8);
+        }
+    </style>
+</head>
+<body class="selection:bg-orange-600 selection:text-white">
+
+    <div class="pong-container flex flex-col items-center">
+        <h1 class="title-font text-3xl md:text-5xl text-orange-400 mb-6 text-center">PONG ARCADE</h1>
+        
+        <!-- Score Display Top (Player 2 / AI) -->
+        <div id="score-top" class="score-display text-emerald-400 w-full text-center">
+            P2/AI: 0
+        </div>
+
+        <!-- Game Canvas (600x400 ratio maintained for classic feel) -->
+        <canvas id="pongCanvas" width="600" height="400" class="hidden"></canvas>
+        
+        <!-- Game Controls / Info -->
+        <div id="game-info" class="w-full text-center mt-2 text-sm text-slate-400 hidden p-2 rounded-lg bg-slate-700/50">
+            <p id="controls-p1" class="mb-1 text-orange-300">P1 (Bottom Paddle): [A] Left, [D] Right</p>
+            <p id="controls-p2" class="text-emerald-300">P2 (Top Paddle): &larr; Left, &rarr; Right</p>
+            <p class="mt-2 text-xs text-slate-500">First to 10 wins the match!</p>
+        </div>
+
+        <!-- Score Display Bottom (Player 1) -->
+        <div id="score-bottom" class="score-display text-orange-400 w-full text-center mt-2">
+            P1: 0
+        </div>
+
+        <!-- Start Screen -->
+        <div id="start-screen" class="flex flex-col items-center p-8 mt-4">
+            <h2 class="text-xl mb-6 text-center text-slate-200 title-font text-md">SELECT MODE:</h2>
+            <div class="flex flex-col sm:flex-row gap-4">
+                <button id="singlePlayerBtn" class="start-button bg-orange-600 hover:bg-orange-700 text-white py-4 px-6 rounded-xl shadow-xl shadow-orange-900/50">
+                    1 PLAYER (VS AI)
+                </button>
+                <button id="multiPlayerBtn" class="start-button bg-emerald-600 hover:bg-emerald-700 text-white py-4 px-6 rounded-xl shadow-xl shadow-emerald-900/50">
+                    2 PLAYER (LOCAL)
+                </button>
+            </div>
+            <p id="auth-status" class="mt-6 text-xs text-slate-500 rounded-lg p-2 bg-slate-700/50">
+                User ID: Initializing...
+            </p>
+        </div>
+
+        <!-- Message Box (Used instead of alert/confirm) -->
+        <div id="message-box" class="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center hidden z-50" onclick="hideMessage()">
+            <div class="bg-slate-700 p-8 rounded-xl shadow-2xl max-w-sm mx-4 text-center border-4 border-orange-500" onclick="event.stopPropagation()">
+                <h3 id="message-title" class="title-font text-2xl mb-4 text-orange-400">Game Over</h3>
+                <p id="message-content" class="text-slate-200 mb-6 text-lg">Winner is Player 1!</p>
+                <button class="bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-6 rounded-lg font-bold transition-all title-font" onclick="hideMessage()">
+                    PLAY AGAIN
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        // --- Firebase Initialization (Required Boilerplate) ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        setLogLevel('Debug');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { projectId: "demo-pong" };
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        let app, db, auth, userId;
+        
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+
+            onAuthStateChanged(auth, async (user) => {
+                const authStatusEl = document.getElementById('auth-status');
+                if (user) {
+                    userId = user.uid;
+                    authStatusEl.textContent = `User ID: ${userId}`;
+                } else {
+                    // Sign in anonymously if no token is available
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                }
+            });
+        } catch (error) {
+            console.error("Firebase initialization failed:", error);
+            document.getElementById('auth-status').textContent = "User ID: Auth Failed";
+        }
+        
+        // --- Game Setup ---
+        const canvas = document.getElementById('pongCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const WINNING_SCORE = 10;
+        const CANVAS_WIDTH = canvas.width;
+        const CANVAS_HEIGHT = canvas.height;
+        
+        // Game State
+        let gameMode = null; // 'single' or 'multi'
+        let gameRunning = false;
+        
+        // Game Objects Configuration
+        const paddleConfig = {
+            width: 80,
+            height: 10,
+            speed: 7,
+        };
+        
+        const ballConfig = {
+            size: 10,
+            initialSpeed: 5,
+        };
+
+        // Current Game Object State
+        const ball = {
+            x: CANVAS_WIDTH / 2,
+            y: CANVAS_HEIGHT / 2,
+            size: ballConfig.size,
+            speed: ballConfig.initialSpeed,
+            velocityX: 0,
+            velocityY: 0,
+            color: '#FFFFFF' // Changed to White
+        };
+
+        const player1 = {
+            // Bottom paddle
+            x: CANVAS_WIDTH / 2 - paddleConfig.width / 2,
+            y: CANVAS_HEIGHT - paddleConfig.height - 5,
+            score: 0,
+            dx: 0, // direction x
+            color: '#FFFFFF' // Changed to White
+        };
+        
+        const player2 = {
+            // Top paddle (AI or Human)
+            x: CANVAS_WIDTH / 2 - paddleConfig.width / 2,
+            y: 5,
+            score: 0,
+            dx: 0, // direction x
+            color: '#FFFFFF' // Changed to White
+        };
+
+        // Key State Tracking for smooth movement
+        const keys = {
+            a: false,
+            d: false,
+            ArrowLeft: false,
+            ArrowRight: false
+        };
+
+        // --- Utility Functions ---
+
+        /** Draws a rectangle, used for paddles and the square ball. */
+        function drawRect(x, y, w, h, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, w, h);
+        }
+
+        /** Updates the score displays on the screen. */
+        function updateScoreDisplay() {
+            document.getElementById('score-bottom').textContent = `P1: ${player1.score}`;
+            document.getElementById('score-top').textContent = 
+                (gameMode === 'single' ? 'AI' : 'P2') + `: ${player2.score}`;
+        }
+
+        /** Shows a custom modal message box (replacing alert()). */
+        function showMessage(title, content) {
+            document.getElementById('message-title').textContent = title;
+            document.getElementById('message-content').textContent = content;
+            document.getElementById('message-box').style.display = 'flex';
+        }
+
+        /** Hides the message box and resets the game. */
+        window.hideMessage = function() { // Expose to global scope for HTML onclick
+            document.getElementById('message-box').style.display = 'none';
+            resetGame();
+        }
+
+        /** Resets the ball to the center with a new, randomized velocity. */
+        function resetBall(servingPlayer) {
+            ball.x = CANVAS_WIDTH / 2;
+            ball.y = CANVAS_HEIGHT / 2;
+            ball.speed = ballConfig.initialSpeed; // Reset speed
+
+            // Calculate a random angle between 30 and 150 degrees (for downward trajectory) or -30 and -150 (for upward)
+            // This prevents purely vertical or shallow horizontal shots.
+            let angleRad;
+            if (Math.random() < 0.5) { // Left or Right start
+                angleRad = Math.random() * (Math.PI / 3) + (Math.PI / 12); // 15 to 60 degrees from vertical
+                if (Math.random() < 0.5) angleRad = -angleRad; // Mirror to other side
+            } else {
+                angleRad = 0; // Straight up/down
+            }
+
+
+            // Determine the vertical direction based on the serving player
+            let directionY = servingPlayer === 2 ? 1 : -1; // 1 for down (towards P1), -1 for up (towards P2)
+            
+            // Apply velocity from angle and speed
+            ball.velocityX = ball.speed * Math.sin(angleRad);
+            ball.velocityY = ball.speed * Math.cos(angleRad) * directionY;
+            
+            // Ensure some minimum horizontal speed to prevent stuck states
+            if (Math.abs(ball.velocityX) < 1) {
+                ball.velocityX = (Math.random() < 0.5 ? 1 : -1) * 1;
+            }
+        }
+
+        /** Checks the scores and ends the game if a player has won. */
+        function checkWin() {
+            if (player1.score >= WINNING_SCORE) {
+                showMessage("Game Over!", "Player 1 Wins! Great Job!");
+                gameRunning = false;
+                return true;
+            }
+            if (player2.score >= WINNING_SCORE) {
+                const winner = gameMode === 'single' ? 'The AI' : 'Player 2';
+                showMessage("Game Over!", `${winner} Wins!`);
+                gameRunning = false;
+                return true;
+            }
+            return false;
+        }
+
+        // --- Game Logic ---
+
+        /** Logic for the simple AI controlled paddle (Player 2). */
+        function aiMove() {
+            if (gameMode !== 'single') return;
+
+            const paddleCenter = player2.x + paddleConfig.width / 2;
+            const diff = ball.x - paddleCenter;
+            const reactionSpeed = 0.09; 
+            
+            if (ball.velocityY < 0) { // Only track the ball if it's coming towards the AI
+                player2.dx = diff * reactionSpeed;
+            } else {
+                // When the ball is going away, slowly center the paddle
+                player2.dx = (CANVAS_WIDTH / 2 - paddleCenter) * 0.05;
+            }
+
+            // Limit AI movement speed
+            player2.dx = Math.min(Math.max(player2.dx, -paddleConfig.speed), paddleConfig.speed);
+        }
+
+        /** Main update function: handles movement, collision, and scoring. */
+        function update() {
+            if (!gameRunning) return;
+
+            // 1. Handle Paddle Movement (Player 1 & 2/AI)
+            
+            // P1 (WASD)
+            player1.dx = 0;
+            if (keys.a) player1.dx = -paddleConfig.speed;
+            if (keys.d) player1.dx = paddleConfig.speed;
+            
+            // P2 (Arrows) or AI
+            if (gameMode === 'multi') {
+                player2.dx = 0;
+                if (keys.ArrowLeft) player2.dx = -paddleConfig.speed;
+                if (keys.ArrowRight) player2.dx = paddleConfig.speed;
+            } else if (gameMode === 'single') {
+                aiMove();
+            }
+
+            // Apply movement and boundary checks
+            player1.x += player1.dx;
+            player2.x += player2.dx;
+            
+            player1.x = Math.max(0, Math.min(player1.x, CANVAS_WIDTH - paddleConfig.width));
+            player2.x = Math.max(0, Math.min(player2.x, CANVAS_WIDTH - paddleConfig.width));
+
+            // 2. Ball Movement
+            ball.x += ball.velocityX;
+            ball.y += ball.velocityY;
+
+            // 3. Ball Collision with Left/Right Walls
+            if (ball.x - ball.size / 2 < 0 || ball.x + ball.size / 2 > CANVAS_WIDTH) {
+                ball.velocityX = -ball.velocityX; 
+            }
+
+            // 4. Ball Collision with Top/Bottom Walls (Scoring)
+            let servingPlayer = null;
+
+            if (ball.y - ball.size / 2 < 0) {
+                // Ball crossed Player 2/AI line -> Player 1 scores
+                player1.score++;
+                servingPlayer = 1;
+            }
+            if (ball.y + ball.size / 2 > CANVAS_HEIGHT) {
+                // Ball crossed Player 1 line -> Player 2/AI scores
+                player2.score++;
+                servingPlayer = 2;
+            }
+
+            if (servingPlayer !== null) {
+                updateScoreDisplay();
+                if (!checkWin()) {
+                    resetBall(servingPlayer); 
+                }
+                return;
+            }
+
+
+            // 5. Ball Collision with Paddles 
+            
+            // Function to check and handle paddle collision
+            function handlePaddleCollision(player) {
+                // Collision box check
+                if (ball.x + ball.size / 2 > player.x && 
+                    ball.x - ball.size / 2 < player.x + paddleConfig.width) {
+
+                    if (player === player1) {
+                        // Check P1 (Bottom) collision
+                        if (ball.y + ball.size / 2 >= player1.y && ball.velocityY > 0) {
+                            return true;
+                        }
+                    } else {
+                        // Check P2 (Top) collision
+                        if (ball.y - ball.size / 2 <= player2.y + paddleConfig.height && ball.velocityY < 0) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            if (handlePaddleCollision(player1)) {
+                // P1 hit: reverse Y velocity and calculate new X velocity
+                let collidePoint = (ball.x - (player1.x + paddleConfig.width / 2)) / (paddleConfig.width / 2);
+                let angle = collidePoint * (Math.PI / 3); // Max angle 60 degrees
+                
+                ball.speed = Math.min(ball.speed + 0.3, 15); // Increase speed, capped at 15
+                ball.velocityX = ball.speed * Math.sin(angle);
+                ball.velocityY = -ball.speed * Math.cos(angle);
+            }
+            
+            if (handlePaddleCollision(player2)) {
+                // P2 hit: reverse Y velocity and calculate new X velocity
+                let collidePoint = (ball.x - (player2.x + paddleConfig.width / 2)) / (paddleConfig.width / 2);
+                let angle = collidePoint * (Math.PI / 3); 
+                
+                ball.speed = Math.min(ball.speed + 0.3, 15); // Increase speed, capped at 15
+                ball.velocityX = ball.speed * Math.sin(angle);
+                ball.velocityY = ball.speed * Math.cos(angle);
+            }
+        }
+
+        /** Draws all game elements to the canvas. */
+        function draw() {
+            // IMPORTANT: Clear the entire canvas on every frame to prevent smearing
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Draw center line (dashed)
+            ctx.strokeStyle = '#475569'; // Slate 600
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(0, CANVAS_HEIGHT / 2);
+            ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset line dash
+
+            // Draw Paddles (Rectangles)
+            drawRect(player1.x, player1.y, paddleConfig.width, paddleConfig.height, player1.color);
+            drawRect(player2.x, player2.y, paddleConfig.width, paddleConfig.height, player2.color);
+
+            // Draw Ball (Square)
+            drawRect(ball.x - ball.size / 2, ball.y - ball.size / 2, ball.size, ball.size, ball.color);
+        }
+
+        let lastTime = 0;
+        const FPS = 60;
+        const frameDuration = 1000 / FPS;
+        let running = false; // Controls the main requestAnimationFrame loop
+
+        /** Game loop for continuous animation and physics. */
+        function gameLoop(currentTime) {
+            if (!running) return;
+
+            const deltaTime = currentTime - lastTime;
+
+            if (deltaTime >= frameDuration) {
+                // Only update and draw if enough time has passed (maintaining FPS)
+                update();
+                draw();
+                lastTime = currentTime - (deltaTime % frameDuration);
+            }
+
+            // Continue the loop only if the game is still set to run
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // --- Input Handlers (Keyboard) ---
+        window.addEventListener('keydown', (e) => {
+            if (!gameRunning) return;
+            switch(e.key.toLowerCase()) {
+                // Player 1 (Bottom): WASD
+                case 'a': keys.a = true; e.preventDefault(); break;
+                case 'd': keys.d = true; e.preventDefault(); break;
+                // Player 2 (Top): Arrow Keys (Multiplayer only)
+                case 'arrowleft': if (gameMode === 'multi') keys.ArrowLeft = true; e.preventDefault(); break;
+                case 'arrowright': if (gameMode === 'multi') keys.ArrowRight = true; e.preventDefault(); break;
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (!gameRunning) return;
+            switch(e.key.toLowerCase()) {
+                // Player 1 (Bottom): WASD
+                case 'a': keys.a = false; break;
+                case 'd': keys.d = false; break;
+                // Player 2 (Top): Arrow Keys (Multiplayer only)
+                case 'arrowleft': if (gameMode === 'multi') keys.ArrowLeft = false; break;
+                case 'arrowright': if (gameMode === 'multi') keys.ArrowRight = false; break;
+            }
+        });
+
+        // --- Game Flow Control ---
+
+        /** Initializes the game for the selected mode. */
+        function setMode(mode) {
+            gameMode = mode;
+            document.getElementById('start-screen').classList.add('hidden');
+            canvas.classList.remove('hidden');
+            document.getElementById('game-info').classList.remove('hidden');
+
+            const controlsP2 = document.getElementById('controls-p2');
+            if (mode === 'single') {
+                controlsP2.textContent = "P2 (AI): Automated Defense";
+            } else {
+                controlsP2.textContent = "P2 (Top Paddle): ← Left, → Right";
+            }
+            
+            startGame();
+        }
+
+        /** Starts a new round/match. */
+        function startGame() {
+            // Reset scores
+            player1.score = 0;
+            player2.score = 0;
+            updateScoreDisplay();
+            
+            // Reset ball and paddles position
+            resetBall(Math.random() < 0.5 ? 1 : 2); // Random initial serve
+            player1.x = CANVAS_WIDTH / 2 - paddleConfig.width / 2;
+            player2.x = CANVAS_WIDTH / 2 - paddleConfig.width / 2;
+
+            // Start loop (if it wasn't running already)
+            gameRunning = true;
+            if (!running) {
+                running = true;
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        /** Returns the game to the initial mode selection screen. */
+        function resetGame() {
+            // Stop game logic
+            gameRunning = false;
+            
+            // Reset visual state
+            document.getElementById('start-screen').classList.remove('hidden');
+            canvas.classList.add('hidden');
+            document.getElementById('game-info').classList.add('hidden');
+            gameMode = null;
+            
+            // Reset key states
+            for (const key in keys) {
+                keys[key] = false;
+            }
+
+            // Reset scores for display
+            player1.score = 0;
+            player2.score = 0;
+            document.getElementById('score-bottom').textContent = `P1: 0`;
+            document.getElementById('score-top').textContent = `P2/AI: 0`;
+        }
+
+        // --- Event Listeners for Mode Selection ---
+        document.getElementById('singlePlayerBtn').addEventListener('click', () => setMode('single'));
+        document.getElementById('multiPlayerBtn').addEventListener('click', () => setMode('multi'));
+
+        // Start the game loop on window load
+        window.onload = function() {
+            updateScoreDisplay();
+            running = true;
+            gameLoop(0); 
+        };
+
+    </script>
+</body>
+</html>
