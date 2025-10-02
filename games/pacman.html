@@ -4,29 +4,54 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Square Pac-Man</title>
+<script src="https://cdn.tailwindcss.com"></script>
 <style>
-  :root{--bg:#000;--walls:#0f3b6b;--pac:#ffd166;--dot:#ffe3a7;--power:#ff6b6b;--ghosts:#61dafb}
-  html,body{height:100%;margin:0;background:var(--bg);display:flex;align-items:center;justify-content:center;font-family:Inter,system-ui,Segoe UI,Roboto}
-  canvas{image-rendering:pixelated;border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,0.6)}
+  /* Updated to match the generator's aesthetic */
+  :root{
+      --bg: #1a202c; /* Dark background from generator */
+      --walls: #00008b; /* Navy Blue wall color from generator */
+      --pac: #ffd166;
+      --dot: #ffe3a7;
+      --power: #ffcc00; /* Yellow power pellet/title color */
+      --ghosts: #61dafb;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;700&display=swap');
+
+  html,body{height:100%;margin:0;background:var(--bg);display:flex;align-items:center;justify-content:center;font-family:'Inter', system-ui, Segoe UI, Roboto; overflow: hidden;}
+  canvas{image-rendering:pixelated;border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,0.6); border: 2px solid #ffcc00;}
   .game-container{position:relative;} /* Wrapper for HUD elements */
 
   /* HUD Styles */
   .hud-container{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;color:#fff;text-shadow:1px 1px 2px #000;}
-  .top-left, .top-right, .bottom-center{position:absolute;padding:10px;font-size:20px;font-weight:bold;display:flex;align-items:center;}
+  .top-left, .top-right, .bottom-center{position:absolute;padding:10px;font-size:16px;font-weight:bold;display:flex;align-items:center; font-family: 'Press Start 2P', cursive;}
   .top-left{top:0;left:0;}
   .top-right{top:0;right:0;}
   .bottom-center{bottom:0;left:50%;transform:translateX(-50%);}
-  .heart-icon{color:#ff4d4d;margin:0 2px;font-size:24px;} /* Use a character heart for simplicity */
+  .heart-icon{color:#ff4d4d;margin:0 2px;font-size:20px;} 
 
   /* Overlay for Pause/Ready/Continue */
-  .overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;z-index:10;transition:opacity 0.3s;}
-  .overlay button{background:#0b6b4f;color:#fff;padding:10px 20px;border-radius:8px;border:0;cursor:pointer;font-size:24px;}
+  .overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;z-index:10;transition:opacity 0.3s; font-family: 'Press Start 2P', cursive;}
+  .overlay button{background:var(--power);color:#000;padding:10px 20px;border-radius:8px;border:0;cursor:pointer;font-size:16px; box-shadow: 0 4px 0 #b38f00;}
+  .overlay button:active { box-shadow: none; transform: translateY(4px); }
   .hidden{display:none;opacity:0;}
 
   /* General button styles for the main panel (kept from original) */
   .panel{color:#fff;width:260px;margin-left:18px;}
-  h1{font-size:16px;margin:0 0 8px}
-  .muted{opacity:0.8;font-size:13px}
+  h1{font-size:20px;margin:0 0 8px; color: var(--power); font-family: 'Press Start 2P', cursive;}
+  .muted{opacity:0.8;font-size:13px; color: #a0aec0;}
+  
+  @media (max-width: 768px) {
+    body {
+        flex-direction: column;
+        padding: 10px;
+    }
+    .panel {
+        margin-left: 0;
+        margin-top: 20px;
+        width: 90%;
+        max-width: 400px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -37,8 +62,8 @@
     <button id="continue-btn" class="hidden">Continue</button>
   </div>
   <div class="hud-container">
-    <div class="top-left">Level: <span id="level-counter">1</span></div>
-    <div class="top-right">Score: <span id="point-counter">0</span></div>
+    <div class="top-left">L: <span id="level-counter">1</span></div>
+    <div class="top-right">S: <span id="point-counter">0</span></div>
     <div class="bottom-center" id="heart-counter">
       <span class="heart-icon">♥</span>
       <span class="heart-icon">♥</span>
@@ -48,79 +73,186 @@
 </div>
 <div class="panel">
   <h1>Square Pac-Man</h1>
-  <div style="margin-top:12px;display:flex;gap:8px">
+  <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
     <div class="muted">Press 'Ready?' to start. Press 'Continue' if you die.</div>
   </div>
 </div>
 <script>
-// --- MAP DEFINITIONS ---
-const LEVEL_MAPS = [
-    // Level 1: Maze
-    [
-        "11111111111111111111",
-        "1OPPPPPP2222PPPPPO1",
-        "1P22222P2222P22222P1",
-        "1P22222P2222P22222P1",
-        "1PPPPPPPPPPPPPPPPPP1",
-        "1P222P222P P2222P222P1",
-        "1P222P222P P2222P222P1",
-        "1PPP22PPPPPP22PPPP1",
-        "1PPP2222202222PPPP1", // <-- GATE OPENING (0) at [8, 10]
-        "1PPP22PQW000P22PPPP1",
-        "1PPP22PER000P22PPPP1",
-        "1PPP22P00000P22PPPP1",
-        "1PPP2222PPP2222PPPP1",
-        "1P222P22222222P222P1",
-        "1P222P22222222P222P1",
-        "1PPPPPPPPPPPPPPPPPP1",
-        "1P22222P2222P22222P1",
-        "1OPPPPPPP2222PPPPPO1",
-        "11111111111111111111"
-    ],
-    // Level 2: Opened Gate at R8, C10 (example of a different level)
-    [
-        "11111111111111111111",
-        "1OPPPPPPPPPPPPPPPP O1",
-        "1P2222222222222222P1",
-        "1P2222222222222222P1",
-        "1PPPPP22222222PPPPP1",
-        "1P222P22222222P222P1",
-        "1P222P22222222P222P1",
-        "1PPPPPP2222PPPPPPP1",
-        "1PPP22222022222PPPP1",
-        "1PPP22PQW000P22PPPP1",
-        "1PPP22PER000P22PPPP1",
-        "1PPP22P00000P22PPPP1",
-        "1PPP22222222222PPPP1",
-        "1PPPPPP2222PPPPPPP1",
-        "1P222P22222222P222P1",
-        "1P222P22222222P222P1",
-        "1PPPPP22222222PPPPP1",
-        "1OPPPPPPPPPPPPPPPP O1",
-        "11111111111111111111"
-    ],
-	[
-            "11111111111111111111",
-            "1OPPP22222222PPP O1",
-            "1P222P22222222P222P1",
-            "1P222P22222222P222P1",
-            "1PPPPP22222222PPPPP1",
-            "1P222P22222222P222P1",
-            "1P222P22222222P222P1",
-            "1PPPPPPP222PPPPPPPP1",
-            "1PPP22222022222PPPP1", // <-- GATE OPENING (0) at [8, 10]
-            "1PPP22PQW000P22PPPP1",
-            "1PPP22PER000P22PPPP1",
-            "1PPP22P00000P22PPPP1",
-            "1PPP22222222222PPPP1",
-            "1PPPPPPP222PPPPPPPP1",
-            "1P222P22222222P222P1",
-            "1P222P22222222P222P1",
-            "1PPPPP22222222PPPPP1",
-            "1OPPP22222222PPP O1",
-            "11111111111111111111"
-        ]
+// --- MAP GENERATION LOGIC ---
+
+const ROWS = 19;
+const COLS = 20;
+const GHOST_GATE = { r: 8, c: 10 }; // [R8, C10]
+const PACMAN_START = {x: 10.5, y: 15.5}; // Slightly offset to ensure proper centering
+const GHOST_STARTS = [{x: 9.5, y: 9.5}, {x: 10.5, y: 9.5}, {x: 9.5, y: 10.5}, {x: 10.5, y: 10.5}]; 
+const POWER_PELLET_LOCATIONS = [
+    { r: 1, c: 1 }, 
+    { r: 1, c: COLS - 2 }, 
+    { r: ROWS - 2, c: 1 }, 
+    { r: ROWS - 2, c: COLS - 2 } 
 ];
+
+/* TILE KEY (Internal Generator Use):
+    1: Map Border (Absolute solid)
+    2: Inner Wall (Solid)
+    0: Path / Empty Tunnel
+    P: Pellet
+    O: Power Pellet
+    QWER: Ghost Spawn Floor (treated as 0 in game map)
+    */
+
+class PacmanMazeGenerator {
+    constructor(rows, cols) {
+        this.rows = rows;
+        this.cols = cols;
+        this.grid = [];
+    }
+
+    initGrid() {
+        this.grid = [];
+        for (let r = 0; r < this.rows; r++) {
+            const row = [];
+            for (let c = 0; c < this.cols; c++) {
+                if (r === 0 || r === this.rows - 1 || c === 0 || c === this.cols - 1) {
+                    row.push('1'); // Border wall
+                } else {
+                    row.push('2'); // Inner wall
+                }
+            }
+            this.grid.push(row);
+        }
+    }
+
+    placeGhostHouse() {
+        const gateR = GHOST_GATE.r;
+        const gateC = GHOST_GATE.c;
+
+        // Coordinates based on the fixed structure requested by user
+        const houseLayout = [
+            // Inner Ghost Spawn Floor
+            { r: gateR + 1, c: gateC, tile: 'Q' }, // Blinky's start
+            { r: gateR + 1, c: gateC + 1, tile: 'W' }, 
+            { r: gateR + 2, c: gateC, tile: 'E' }, // Pinky's start
+            { r: gateR + 2, c: gateC + 1, tile: 'R' },
+            // Inner path (0) tiles in the ghost house
+            { r: gateR + 1, c: gateC - 1, tile: '0' },
+            { r: gateR + 1, c: gateC + 2, tile: '0' },
+            { r: gateR + 2, c: gateC - 1, tile: '0' },
+            { r: gateR + 2, c: gateC + 2, tile: '0' },
+            { r: gateR + 3, c: gateC, tile: '0' }, 
+            { r: gateR + 3, c: gateC + 1, tile: '0' },
+
+        ];
+
+        // 1. Ghost House Walls Perimeter (Using an 8x5 solid block centered around the gate)
+        const wallStartC = gateC - 4;
+        const wallEndC = gateC + 5; // C15
+        const wallStartR = gateR - 1;
+        const wallEndR = gateR + 4; // R12
+
+        for (let r = wallStartR; r <= wallEndR; r++) {
+            for (let c = wallStartC; c <= wallEndC; c++) {
+                // Ensure walls are not borders
+                if (r > 0 && r < this.rows - 1 && c > 0 && c < this.cols - 1) {
+                    this.grid[r][c] = '2';
+                }
+            }
+        }
+        
+        // 2. Open up the inner area and apply the fixed ghost floor/paths
+        houseLayout.forEach(pos => {
+            this.grid[pos.r][pos.c] = pos.tile;
+        });
+
+        // 3. Gate Opening
+        this.grid[gateR][gateC] = '0'; // Gate opening path at R8, C10
+        this.grid[gateR][gateC + 1] = '0'; // Gate opening path at R8, C11
+        
+        // Ensure the path *leading to* the gate is carved out (0)
+        // Path above the ghost house
+        for(let c = gateC - 3; c <= gateC + 4; c++) {
+            this.grid[gateR][c] = '0';
+        }
+    }
+
+    carveMaze(r, c) {
+        const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+        this.shuffle(directions);
+
+        for (const [dr, dc] of directions) {
+            const nextR = r + dr * 2;
+            const nextC = c + dc * 2;
+            const wallR = r + dr;
+            const wallC = c + dc;
+
+            if (
+                nextR > 0 && nextR < this.rows - 1 &&
+                nextC > 0 && nextC < this.cols - 1 &&
+                this.grid[nextR][nextC] === '2'
+            ) {
+                // Define the fixed ghost house boundary to prevent carving through its perimeter
+                const isCarvingHousePerimeter = (
+                    wallR >= GHOST_GATE.r - 1 && wallR <= GHOST_GATE.r + 4 &&
+                    wallC >= GHOST_GATE.c - 4 && wallC <= GHOST_GATE.c + 5
+                );
+
+                if (!isCarvingHousePerimeter) {
+                    this.grid[wallR][wallC] = '0';
+                    this.grid[nextR][nextC] = '0';
+                    this.carveMaze(nextR, nextC);
+                }
+            }
+        }
+    }
+
+    shuffle(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+    
+    placePellets() {
+        for (let r = 1; r < this.rows - 1; r++) {
+            for (let c = 1; c < this.cols - 1; c++) {
+                // Place standard pellets ('P') where there's an empty path ('0')
+                if (this.grid[r][c] === '0') {
+                    this.grid[r][c] = 'P';
+                }
+            }
+        }
+
+        // Place Power Pellets ('O') at fixed corner locations, overwriting 'P'
+        POWER_PELLET_LOCATIONS.forEach(pos => {
+            const tile = this.grid[pos.r][pos.c];
+            if (tile !== '1' && tile !== '2') { 
+                 this.grid[pos.r][pos.c] = 'O';
+            }
+        });
+        
+        // Ensure the ghost gate opening is an empty path '0' (no pellet)
+        this.grid[GHOST_GATE.r][GHOST_GATE.c] = '0';
+        this.grid[GHOST_GATE.r][GHOST_GATE.c + 1] = '0'; 
+    }
+
+    generateMap() {
+        this.initGrid();
+        this.placeGhostHouse();
+
+        // Start maze carving from a tile outside the house area
+        const startR = 3; 
+        const startC = 3; 
+        this.grid[startR][startC] = '0';
+        this.carveMaze(startR, startC);
+
+        this.placePellets();
+
+        // Convert the 2D array back to an array of strings for game consumption
+        return this.grid.map(row => row.join(''));
+    }
+}
+
+// --- GAME SETUP & MAP LOGIC ---
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -134,18 +266,14 @@ const readyBtn = document.getElementById('ready-up-btn');
 const continueBtn = document.getElementById('continue-btn');
 
 const TILE = 20; // px
-const COLS = 20; // Matches new map width
-const ROWS = 19; // Matches new map height
 const WIDTH = COLS * TILE;
 const HEIGHT = ROWS * TILE;
 canvas.width = WIDTH; canvas.height = HEIGHT;
 
 let map = [];
-let totalPellets = 0; // To track progress for level up
+let totalPellets = 0; 
 
 // Entities
-const PACMAN_START = {x: 10, y: 15}; // Adjusted to fit new map
-const GHOST_STARTS = [{x: 9, y: 9}, {x: 10, y: 9}, {x: 9, y: 10}, {x: 10, y: 10}]; // Q, W, E, R positions
 const player = {x:0, y:0, dir:{x:0,y:0}, nextDir:{x:0,y:0}, speed:0.12, radius:TILE*0.45, mouth:0.3};
 const ghosts = [];
 const ghostColors = ['#ff0000','#ffb8ff','#00ffff','#ffb852']; // Red, Pink, Cyan, Orange
@@ -160,25 +288,10 @@ let frightenedTimer = 0;
 
 // --- UTILITY FUNCTIONS FOR PATHING ---
 
-const ALIGN_TOLERANCE = 0.05; // Maximum distance (in tiles) from the center to be considered aligned
-
-/**
- * Checks if a floating-point coordinate (x, y) is centered on a grid tile.
- * @param {number} x - The x coordinate in tiles.
- * @param {number} y - The y coordinate in tiles.
- * @returns {boolean} True if the entity is centered.
- */
-function isCentered(x, y) {
-  const isXCentered = Math.abs(x - Math.floor(x + 0.5)) < ALIGN_TOLERANCE;
-  const isYCentered = Math.abs(y - Math.floor(y + 0.5)) < ALIGN_TOLERANCE;
-  return isXCentered && isYCentered;
-}
+const ALIGN_TOLERANCE = 0.05; 
 
 /**
  * Returns the map value at the given tile coordinates.
- * @param {number} x - Tile column index.
- * @param {number} y - Tile row index.
- * @returns {number} The tile value (1=wall, 0=path, 2=pellet, 3=power pellet).
  */
 function tileAt(x, y) {
   const c = Math.floor(x), r = Math.floor(y); 
@@ -188,43 +301,52 @@ function tileAt(x, y) {
 
 /**
  * Checks if a specific tile coordinate is a walkable path (0, 2, or 3).
- * @param {number} x - Tile column index.
- * @param {number} y - Tile row index.
- * @returns {boolean} True if the tile is not a wall.
+ * * 0: Path/Gate, 2: Pellet, 3: Power Pellet, 1: Wall
  */
 function canMove(x, y) {
   const v = tileAt(x, y);
-  // Walkable if it's empty path (0), pellet (2), or power pellet (3)
   return (v === 0 || v === 2 || v === 3);
 }
 
-// --- GAME SETUP & MAP LOGIC ---
 
-function loadLevel(levelIndex) {
-  const levelMap = LEVEL_MAPS[levelIndex % LEVEL_MAPS.length];
-  map = levelMap.map(row => row.split('').map(char => {
+function loadLevel() {
+  // --- Dynamic Maze Generation ---
+  const generator = new PacmanMazeGenerator(ROWS, COLS);
+  const generatedMapString = generator.generateMap();
+
+  // Convert the generated string map to the numeric map used by the game
+  map = generatedMapString.map(row => row.split('').map(char => {
     switch(char) {
       case '1': return 1; // Border Wall
       case '2': return 1; // Inner Wall (solid wall)
       case 'P': return 2; // Pellet
       case 'O': return 3; // Power Pellet
-      case '0': return 0; // Path/Gate
-      case 'Q': case 'W': case 'E': case 'R': return 0; // Ghost spawn tiles
-      case ' ': return 0; // Empty path
+      case '0': 
+      case 'Q': case 'W': case 'E': case 'R': return 0; // Path/Gate/Ghost spawn tiles
+      case ' ': return 0; // Empty path (shouldn't happen with generator, but safety)
       default: return 0;
     }
   }));
 
-  totalPellets = map.flat().filter(v => v === 2 || v === 3).length;
+  totalPellets = 0;
+  // Recalculate pellet count after reset 
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (map[r][c] === 2 || map[r][c] === 3) {
+        totalPellets++;
+      }
+    }
+  }
 }
 
 function createGhosts() {
   ghosts.length = 0;
+  // Ghost starts are slightly offset from tile center to avoid instant collision at start
   GHOST_STARTS.forEach((start, i) => {
     ghosts.push({
       x: start.x, y: start.y,
       dir: {x: 0, y: 0},
-      speed: 0.09 + i * 0.01,
+      speed: 0.09 + i * 0.005, // Slight speed variation
       state: 'scatter',
       color: ghostColors[i],
       fright: false
@@ -244,27 +366,19 @@ function resetLevel(newLevel = false) {
   if (newLevel) {
     currentLevel++;
   }
-  loadLevel(currentLevel);
+  loadLevel();
   createGhosts();
 
-  // Reset Pac-Man Position (snap to center)
+  // Reset Pac-Man Position
   player.x = PACMAN_START.x; 
   player.y = PACMAN_START.y;
   player.dir = {x: 0, y: 0};
   player.nextDir = {x: 0, y: 0};
 
   frightenedTimer = 0;
-
-  // Recalculate pellet count after reset (and ensure Pac-Man's spawn tile is empty)
-  totalPellets = 0;
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      if (map[r][c] === 2 || map[r][c] === 3) {
-        totalPellets++;
-      }
-    }
-  }
-  map[Math.floor(player.y)][Math.floor(player.x)] = 0; // Ensure spawn is clear
+  
+  // Ensure Pac-Man's spawn tile is clear of any pellets (set to 0)
+  map[Math.floor(player.y)][Math.floor(player.x)] = 0; 
   
   setUI();
 }
@@ -273,7 +387,6 @@ function resetLevel(newLevel = false) {
 function setUI() {
   scoreEl.textContent = score;
   levelCounterEl.textContent = currentLevel + 1;
-  // Update heart counter
   heartCounterEl.innerHTML = Array(lives).fill('<span class="heart-icon">♥</span>').join('');
 }
 
@@ -286,7 +399,7 @@ function showOverlay(state) {
   if (state === 'ready') {
     readyBtn.classList.remove('hidden');
   } else if (state === 'continue') {
-    continueBtn.textContent = 'Continue';
+    continueBtn.textContent = `Continue (L: ${lives})`;
     continueBtn.classList.remove('hidden');
   } else if (state === 'game-over') {
     continueBtn.textContent = 'Game Over. Restart?';
@@ -311,41 +424,14 @@ readyBtn.onclick = () => {
 };
 
 continueBtn.onclick = () => {
-  if (lives > 0) {
+  if (lives > 0 && continueBtn.textContent.includes('Continue')) {
     resetLevel(false); 
     hideOverlay();
   } else {
+    // Game over / Restart
     resetGame();
   }
 };
-
-window.addEventListener('keydown', e => {
-  if (!running || paused) return;
-  if (e.key.includes('Arrow')) {
-    const d = {ArrowLeft: {x: -1, y: 0}, ArrowRight: {x: 1, y: 0}, ArrowUp: {x: 0, y: -1}, ArrowDown: {x: 0, y: 1}}[e.key];
-    player.nextDir = d;
-  }
-});
-
-function canMoveBox(nx, ny) {
-  const half = 0.45; // half the square size in tile units (TILE*0.9 / TILE / 2)
-
-  const left   = nx - half;
-  const right  = nx + half;
-  const top    = ny - half;
-  const bottom = ny + half;
-
-  // Round to nearest tile index for corners
-  const corners = [
-    {x: Math.floor(left  + 0.5), y: Math.floor(top    + 0.5)},
-    {x: Math.floor(right + 0.5), y: Math.floor(top    + 0.5)},
-    {x: Math.floor(left  + 0.5), y: Math.floor(bottom + 0.5)},
-    {x: Math.floor(right + 0.5), y: Math.floor(bottom + 0.5)}
-  ];
-
-  return corners.every(c => canMove(c.x, c.y));
-}
-
 
 const keysHeld = { left:false, right:false, up:false, down:false };
 
@@ -372,59 +458,90 @@ function getHeldDir() {
   return null;
 }
 
+function isCentered(x, y) {
+  const isXCentered = Math.abs(x - (Math.floor(x) + 0.5)) < ALIGN_TOLERANCE;
+  const isYCentered = Math.abs(y - (Math.floor(y) + 0.5)) < ALIGN_TOLERANCE;
+  return isXCentered && isYCentered;
+}
+
 // --- GAME LOGIC UPDATE ---
-// Collision check for a square box instead of a single point
+
 function updatePlayer(delta) {
   const speed = player.speed * 24;
-  const TOL = 0.3;
 
-  const cx = Math.floor(player.x + 0.5);
-  const cy = Math.floor(player.y + 0.5);
+  // FIX: Correctly get the current tile index (the whole number part of the coordinate)
+  const currentTileX = Math.floor(player.x); 
+  const currentTileY = Math.floor(player.y); 
 
   // Update buffered direction from held keys
   const held = getHeldDir();
   if (held) player.nextDir = held;
-
-  // Try to turn
-  if (player.nextDir.x || player.nextDir.y) {
+  
+  // 1. Try to turn (only possible near center of a tile)
+  if ((player.nextDir.x || player.nextDir.y) && isCentered(player.x, player.y)) {
     const d = player.nextDir;
-    const tx = cx + d.x;
-    const ty = cy + d.y;
+    
+    // Check the destination tile (current tile index + direction)
+    const tx = currentTileX + d.x; 
+    const ty = currentTileY + d.y; 
 
     if (canMove(tx, ty)) {
-      const dx = Math.abs(player.x - cx);
-      const dy = Math.abs(player.y - cy);
-
-      if ((d.x !== 0 && dy < TOL) || (d.y !== 0 && dx < TOL)) {
-        player.x = cx;
-        player.y = cy;
         player.dir = d;
-        // ❌ don’t clear nextDir — keeps reusing while key held
-      }
     }
   }
 
-  // Move forward
-  const nx = player.x + player.dir.x * speed * delta;
-  const ny = player.y + player.dir.y * speed * delta;
+  // 2. Move forward
+  const nextX = player.x + player.dir.x * speed * delta;
+  const nextY = player.y + player.dir.y * speed * delta;
+  
+  // Check collision for the tile Pac-Man will enter if he moves
+  const checkX = nextX + player.dir.x * 0.45;
+  const checkY = nextY + player.dir.y * 0.45;
 
   if (player.dir.x !== 0) {
-    if (canMoveBox(nx, player.y)) player.x = nx;
-    else {
-      player.x = cx;
-      player.dir.x = 0;
-    }
+      if (canMove(checkX, player.y)) {
+          player.x = nextX;
+      } else {
+          // Snap to center and stop if blocked
+          player.x = currentTileX + 0.5; // Snap to center of current tile index
+          player.dir.x = 0;
+      }
   }
 
   if (player.dir.y !== 0) {
-    if (canMoveBox(player.x, ny)) player.y = ny;
-    else {
-      player.y = cy;
-      player.dir.y = 0;
+      if (canMove(player.x, checkY)) {
+          player.y = nextY;
+      } else {
+          // Snap to center and stop if blocked
+          player.y = currentTileY + 0.5; // Snap to center of current tile index
+          player.dir.y = 0;
+      }
+  }
+
+  // Handle warping (e.g., tunnel on map border, though not explicitly in this generator)
+  if (player.x < 0) player.x = COLS - 1;
+  if (player.x >= COLS) player.x = 0;
+
+
+  // 3. Eat dots/pellets
+  const pr = Math.floor(player.y), pc = Math.floor(player.x);
+  if (map[pr] && (map[pr][pc] === 2 || map[pr][pc] === 3)) {
+    if (map[pr][pc] === 2) score += 1; 
+    if (map[pr][pc] === 3) {
+      score += 10;
+      frightenedTimer = 8;
+      ghosts.forEach(g => {
+        g.fright = true;
+        g.state = 'frightened';
+      });
     }
+    map[pr][pc] = 0;
+    totalPellets--;
+    setUI();
   }
 }
 
+// Simple pathfinding (BFS) used by ghosts
 function findPath(sx, sy, tx, ty) {
   const visited = Array.from({length: ROWS}, () => Array(COLS).fill(false));
   const queue = [{x: sx, y: sy, path: []}];
@@ -437,52 +554,39 @@ function findPath(sx, sy, tx, ty) {
     for (const d of [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}]) {
       const nx = x + d.x;
       const ny = y + d.y;
-      if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && !visited[ny][nx] && canMove(nx, ny)) {
+      
+      // Ensure we don't treat the wall boundary between the house and the gate as walkable
+      const isWallTile = tileAt(nx, ny) === 1;
+
+      if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && !visited[ny][nx] && canMove(nx, ny) && !isWallTile) {
         visited[ny][nx] = true;
         queue.push({x: nx, y: ny, path: [...path, d]});
       }
     }
   }
-  return []; // no path
+  return []; 
 }
-
-
 
 // --- Ghost personality chasing ---
 function updateGhost(g, i, delta) {
   const sp = g.speed * 24;
 
-  // Work in tile coordinates
-  const cx = Math.floor(g.x + 0.5);
-  const cy = Math.floor(g.y + 0.5);
-  const px = Math.floor(player.x + 0.5);
-  const py = Math.floor(player.y + 0.5);
+  const cx = Math.floor(g.x);
+  const cy = Math.floor(g.y);
+  const px = Math.floor(player.x);
+  const py = Math.floor(player.y);
 
-  // Pick target based on ghost personality
-  let target = {x: px, y: py};
+  // Default target is scatter corner (top-left for 0, top-right for 1, etc.)
+  let target = {x: COLS-2, y: 1}; 
+  if (i === 0) target = {x: 1, y: 1};
+  if (i === 1) target = {x: COLS-2, y: 1};
+  if (i === 2) target = {x: 1, y: ROWS-2};
+  if (i === 3) target = {x: COLS-2, y: ROWS-2};
+  
   if (!g.fright) {
-    switch (i) {
-      case 0: // Blinky (red)
-        target = {x: px, y: py};
-        break;
-      case 1: // Pinky (pink)
-        target = {x: px + player.dir.x * 4, y: py + player.dir.y * 4};
-        break;
-      case 2: // Inky (cyan)
-        const blinky = ghosts[0];
-        const vx = px - Math.floor(blinky.x + 0.5);
-        const vy = py - Math.floor(blinky.y + 0.5);
-        target = {x: px + vx * 2, y: py + vy * 2};
-        break;
-      case 3: // Clyde (orange)
-        const dist = Math.hypot(g.x - player.x, g.y - player.y);
-        target = dist > 6 ? {x: px, y: py} : {x: 1, y: ROWS - 2};
-        break;
-    }
-  } else {
-    // Frightened: scatter randomly
-    target = {x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS)};
+     target = {x: px, y: py}; // Default to chasing Pac-Man
   }
+  // No complex targeting implemented, just simple chase/scatter/frightened
 
   // If centered, decide new direction using pathfinding
   if (isCentered(g.x, g.y)) {
@@ -496,64 +600,27 @@ function updateGhost(g, i, delta) {
   const nx = g.x + g.dir.x * sp * delta;
   const ny = g.y + g.dir.y * sp * delta;
 
-  if (canMoveBox(nx, g.y)) g.x = nx;
-  if (canMoveBox(g.x, ny)) g.y = ny;
+  if (g.dir.x !== 0) {
+    if (canMove(nx + g.dir.x * 0.45, g.y)) g.x = nx;
+    else g.dir.x = 0;
+  }
+  if (g.dir.y !== 0) {
+    if (canMove(g.x, ny + g.dir.y * 0.45)) g.y = ny;
+    else g.dir.y = 0;
+  }
+
+  // Warping (if needed)
+  if (g.x < 0) g.x = COLS - 1;
+  if (g.x >= COLS) g.x = 0;
 }
 
 
 function update(dt) {
   const delta = dt * 0.001;
 
-  // 1. Player Movement and Pellet Eating
-  const speed = player.speed * 24;
-  
-  // Check for direction change (only allow turns when centered)
-  if (player.nextDir.x !== 0 || player.nextDir.y !== 0) {
-    if (isCentered(player.x, player.y)) {
-      const d = player.nextDir;
-      // Check the tile in the desired direction
-      const nextTileX = Math.floor(player.x + 0.5) + d.x;
-      const nextTileY = Math.floor(player.y + 0.5) + d.y;
+  updatePlayer(delta);
 
-      if (canMove(nextTileX, nextTileY)) {
-        player.dir = d;
-        // Snap to center on turn to prevent drift
-        player.x = Math.floor(player.x + 0.5);
-        player.y = Math.floor(player.y + 0.5);
-      }
-      player.nextDir = {x:0, y:0}; // Attempt was made, clear buffer
-    }
-  }
-
-  // Move player
-  const targetX = player.x + player.dir.x * speed * delta;
-  const targetY = player.y + player.dir.y * speed * delta;
-  
-  // Check wall collision: only move if the next position is valid
-  if (canMove(targetX + player.dir.x * 0.2, player.y)) player.x = targetX;
-  else if (player.dir.x !== 0) player.dir.x = 0; // Stop movement if blocked
-
-  if (canMove(player.x, targetY + player.dir.y * 0.2)) player.y = targetY;
-  else if (player.dir.y !== 0) player.dir.y = 0; // Stop movement if blocked
-
-  // Eat dots/pellets
-  const pr = Math.floor(player.y), pc = Math.floor(player.x);
-  if (map[pr] && (map[pr][pc] === 2 || map[pr][pc] === 3)) {
-    if (map[pr][pc] === 2) score += 1; // Pellet: +1 point
-    if (map[pr][pc] === 3) {
-      score += 10; // Power Pellet: +10 points
-      frightenedTimer = 8;
-      ghosts.forEach(g => {
-        g.fright = true;
-        g.state = 'frightened';
-      });
-    }
-    map[pr][pc] = 0;
-    totalPellets--;
-    setUI();
-  }
-
-  // 2. Ghost Update & Movement
+  // 1. Ghost Update & Movement
   frightenedTimer = Math.max(0, frightenedTimer - delta);
   if (frightenedTimer <= 0) ghosts.forEach(g => {
     g.fright = false;
@@ -561,11 +628,9 @@ function update(dt) {
   });
   
   ghosts.forEach((g,i) => updateGhost(g,i,delta));
-  updatePlayer(delta);
 
-
-	// --- 3. Collision Check ---
-	const COLLISION_THRESHOLD = 0.8; // Distance in tiles
+	// 2. Collision Check
+	const COLLISION_THRESHOLD = 0.8; 
 
 	for (let i = 0; i < ghosts.length; i++) {
 		const g = ghosts[i];
@@ -581,7 +646,7 @@ function update(dt) {
 				g.x = start.x;
 				g.y = start.y;
 				g.dir = {x: 0, y: 0};
-				g.fright = false; // Immediately no longer edible
+				g.fright = false; 
 				g.state = 'eaten';
 				
 				setUI();
@@ -590,24 +655,23 @@ function update(dt) {
 				lives--;
 				setUI();
 				
-				// Pause the game and handle life/game over
 				if (lives <= 0) {
 					showOverlay('game-over');
 				} else {
 					showOverlay('continue');
 				}
-				return; // Stop processing this frame after Pac-Man dies
+				return;
 			}
 		}
 	}
 
-  // 4. Level Up Check
+  // 3. Level Up Check
   if (totalPellets <= 0) {
-    resetLevel(true); // Loads the next level and resets everything
+    resetLevel(true); 
   }
 }
 
-// --- DRAWING LOGIC (Unchanged) ---
+// --- DRAWING LOGIC ---
 
 function draw() {
   ctx.fillStyle = '#000';
@@ -618,26 +682,30 @@ function draw() {
     for (let c = 0; c < COLS; c++) {
       const v = map[r][c];
       const x = c * TILE, y = r * TILE;
-		if (v === 2) { // Pellet
-		  ctx.fillStyle = '#ffe3a7';
-		  ctx.fillRect(x + TILE / 2 - 2, y + TILE / 2 - 2, 4, 4);
-		} else if (v === 3) { // Power Pellet
-		  ctx.fillStyle = '#ff6b6b';
-		  ctx.fillRect(x + TILE / 4, y + TILE / 4, TILE / 2, TILE / 2);
-		} else if (v === 1) { // Wall
-		  ctx.fillStyle = '#0f3b6b';
-		  ctx.fillRect(x, y, TILE, TILE);
-		} else if (v === 0) {
-		}
+      
+      // Use wall colors from the generator aesthetic
+      if (v === 1) { // Wall
+        ctx.fillStyle = '#00008b'; // Navy Blue
+        ctx.fillRect(x, y, TILE, TILE);
+      } else if (v === 2) { // Pellet
+        ctx.fillStyle = '#ffe3a7';
+        ctx.fillRect(x + TILE / 2 - 2, y + TILE / 2 - 2, 4, 4);
+      } else if (v === 3) { // Power Pellet
+        ctx.fillStyle = '#ffcc00'; // Yellow
+        // Flashing effect for power pellet
+        if (Math.floor(performance.now() / 250) % 2 === 0) {
+            ctx.fillRect(x + TILE / 4, y + TILE / 4, TILE / 2, TILE / 2);
+        }
+      }
     }
   }
 
   // Draw Player (Square Pac-Man)
-	ctx.beginPath();
     const rectW = TILE * 0.5;
     const rectH = TILE * 0.5;
-    const px = player.x * TILE + TILE / 2 - rectW / 2;
-    const py = player.y * TILE + TILE / 2 - rectH / 2;
+    // Player coordinates are now centered on the tile (e.g., 10.5, 15.5)
+    const px = player.x * TILE - rectW / 2;
+    const py = player.y * TILE - rectH / 2;
 
     ctx.fillStyle = 'yellow';
     ctx.fillRect(px, py, rectW, rectH);
@@ -645,6 +713,7 @@ function draw() {
 
   // Draw Ghosts (Rectangle Ghosts)
   ghosts.forEach(g => {
+    // Ghost coordinates are centered on the tile (e.g., 9.5, 9.5)
     const gx = g.x * TILE, gy = g.y * TILE;
     const rectW = TILE * 0.9;
     const rectH = TILE * 0.9;
@@ -659,12 +728,12 @@ function draw() {
     }
     
     // Draw ghost body centered at the continuous x,y
-    ctx.fillRect(gx + TILE/2 - rectW/2, gy + TILE/2 - rectH/2, rectW, rectH);
+    ctx.fillRect(gx - rectW/2, gy - rectH/2, rectW, rectH);
 
     // Eyes (simplified square eyes)
     ctx.fillStyle = '#fff';
-    ctx.fillRect(gx + TILE * 0.15, gy + TILE * 0.2, TILE * 0.3, TILE * 0.3);
-    ctx.fillRect(gx + TILE * 0.55, gy + TILE * 0.2, TILE * 0.3, TILE * 0.3);
+    ctx.fillRect(gx - TILE * 0.35, gy - TILE * 0.3, TILE * 0.3, TILE * 0.3);
+    ctx.fillRect(gx + TILE * 0.05, gy - TILE * 0.3, TILE * 0.3, TILE * 0.3);
   });
 }
 
