@@ -212,6 +212,44 @@ class PacmanMazeGenerator {
         }
     }
     
+    // --- NEW: Add loops to break dead ends and ensure connectivity ---
+    connectMaze() {
+        // Target 15% chance for a wall block to be converted into a path, 
+        // effectively introducing loops and breaking up long dead ends.
+        const LOOP_FACTOR = 0.15; 
+
+        for (let r = 2; r < this.rows - 2; r++) {
+            for (let c = 2; c < this.cols - 2; c++) {
+                // Check if it's currently an inner wall tile and a random chance succeeds
+                if (this.grid[r][c] === '2' && Math.random() < LOOP_FACTOR) {
+                    
+                    // Ghost House Boundary Check: DO NOT open walls inside the ghost house perimeter
+                    const isHouseWall = (
+                        r >= GHOST_GATE.r - 1 && r <= GHOST_GATE.r + 4 &&
+                        c >= GHOST_GATE.c - 4 && c <= GHOST_GATE.c + 5
+                    );
+
+                    if (!isHouseWall) {
+                        // Check if opening this wall would connect two existing path sections (0, P, O)
+                        const isPath = (val) => val === '0' || val === 'P' || val === 'O';
+                        
+                        let openNeighbors = 0;
+                        if (isPath(this.grid[r-1][c])) openNeighbors++;
+                        if (isPath(this.grid[r+1][c])) openNeighbors++;
+                        if (isPath(this.grid[r][c-1])) openNeighbors++;
+                        if (isPath(this.grid[r][c+1])) openNeighbors++;
+
+                        // Only convert the wall to a path if it has at least one path neighbor
+                        // to ensure it creates a useful loop/connection.
+                        if (openNeighbors >= 1) { 
+                             this.grid[r][c] = '0'; // Open the path
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     placePellets() {
         for (let r = 1; r < this.rows - 1; r++) {
             for (let c = 1; c < this.cols - 1; c++) {
@@ -239,12 +277,16 @@ class PacmanMazeGenerator {
         this.initGrid();
         this.placeGhostHouse();
 
-        // Start maze carving from a tile outside the house area
+        // 1. Carve initial maze structure
         const startR = 3; 
         const startC = 3; 
         this.grid[startR][startC] = '0';
         this.carveMaze(startR, startC);
 
+        // 2. Introduce loops to maximize connectivity
+        this.connectMaze();
+
+        // 3. Place pellets in all open paths
         this.placePellets();
 
         // Convert the 2D array back to an array of strings for game consumption
