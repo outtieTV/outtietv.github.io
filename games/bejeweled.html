@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shape Match</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        /* RETRO CSS STYLES */
+        :root {
+            --game-board-size: 400px;
+            --tile-size: calc(var(--game-board-size) / var(--board-cols));
+            
+            /* Retro Color Palette */
+            --color-bg-light: #c0c7c7; /* Console Gray */
+            --color-bg-dark: #222;
+            --color-border: #4a4a4a;
+            --color-text: #fff;
+            --color-accent: #ff00ff; /* Magenta/Pink */
+            
+            /* Shape Colors - Vibrant and contrasting */
+            --shape-red: #ff3333;    /* Square */
+            --shape-blue: #0099ff;   /* Diamond */
+            --shape-green: #33ff33;  /* Circle */
+            --shape-yellow: #ffff33; /* Triangle */
+            
+            --board-cols: 8; /* Initial setting */
+            --board-rows: 8; /* Initial setting */
+        }
+
+        body {
+            /* Use the retro font for everything */
+            font-family: 'Press Start 2P', cursive;
+            margin: 0;
+            padding: 20px 10px;
+            background-color: var(--color-bg-light);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            color: var(--color-text);
+            box-sizing: border-box;
+            background-image: repeating-linear-gradient(0deg, var(--color-bg-light), var(--color-bg-light) 1px, transparent 1px, transparent 2px);
+            background-size: 100% 4px; /* Subtle scanline effect */
+        }
+
+        /* --- Header and UI --- */
+
+        #game-title {
+            font-size: 1.5em; /* Smaller for pixel font readability */
+            margin-bottom: 15px;
+            color: var(--color-accent);
+            text-shadow: 4px 4px var(--color-border);
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        #game-header {
+            display: flex;
+            justify-content: space-between;
+            width: var(--game-board-size);
+            max-width: 90vw;
+            margin-bottom: 10px;
+            font-size: 0.75em;
+            font-weight: normal;
+            color: var(--shape-red);
+            padding: 5px;
+            background-color: var(--color-bg-dark);
+            border: 3px solid var(--color-border);
+            box-shadow: 4px 4px 0 var(--color-border);
+        }
+
+        /* --- Game Container and Board --- */
+
+        #game-container {
+            position: relative;
+            width: var(--game-board-size);
+            max-width: 90vw;
+            aspect-ratio: 1 / 1;
+            
+            /* Retro Box Styling */
+            border: 6px solid var(--color-border);
+            box-shadow: 8px 8px 0 var(--color-border);
+            background-color: var(--color-bg-dark);
+        }
+
+        #game-board {
+            display: grid;
+            width: 100%;
+            height: 100%;
+            grid-template-columns: repeat(var(--board-cols), 1fr);
+            grid-template-rows: repeat(var(--board-rows), 1fr);
+            position: absolute;
+            top: 0;
+            left: 0;
+            /* Optional: Add a slight inner glow or border for effect */
+            border: 2px solid var(--color-bg-dark);
+            box-sizing: border-box;
+        }
+
+        .gem {
+            /* The 'gem' containers now define the tile appearance */
+            border: 1px solid rgba(0, 0, 0, 0.2); /* Grid lines */
+            transition: transform 0.15s ease-out, box-shadow 0.15s ease-out; 
+        }
+
+        /* --- Shape Overrides (Focus on Blockiness and Shadows) --- */
+        
+        /* General shape styling */
+        .square, .circle, .triangle {
+             box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5); /* Inner shadow for depth */
+        }
+
+        /* Square */
+        .square { 
+            background-color: var(--shape-red); 
+            border-radius: 0; /* Make it strictly blocky */
+            width: 80%;
+            height: 80%;
+        }
+        
+        /* Circle */
+        .circle { 
+            background-color: var(--shape-green); 
+            border-radius: 50%; 
+            width: 80%;
+            height: 80%;
+        }
+        
+        /* Diamond (CSS transformed square) */
+        .diamond {
+            background-color: var(--shape-blue);
+            width: 60%;
+            height: 60%;
+            transform: rotate(45deg);
+            box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+        }
+        
+        /* Triangle (CSS clip-path) */
+        .triangle {
+            background-color: var(--shape-yellow);
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+            width: 80%;
+            height: 80%;
+            box-sizing: border-box;
+        }
+
+        /* Swap animation fix: remove transform transition from inner shapes */
+        .gem > div {
+             transition: none;
+        }
+
+        /* --- Overlay Screens (CRT/Terminal Style) --- */
+
+        .overlay {
+            position: absolute; /* Ensures it covers the parent container */
+            top: 0;
+            left: 0;
+            width: 100%; /* Full width of container */
+            height: 100%; /* Full height of container (MAXIMIZED CLICKBOX) */
+            background-color: var(--color-bg-dark);
+            /* Retro transparent effect */
+            background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            background-size: 4px 4px, 4px 4px;
+
+            color: var(--shape-green); /* Classic terminal text */
+            border: 3px dashed var(--color-accent);
+            box-shadow: 0 0 10px rgba(255, 0, 255, 0.5); /* Glow effect */
+            padding: 20px;
+            
+            /* Positioning content */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 100;
+            cursor: pointer; /* Indicates it's clickable */
+
+            /* Ensure text is readable */
+            font-size: 0.7em;
+            line-height: 1.5;
+            text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.5);
+        }
+
+        .overlay h2 {
+            font-size: 1.8em;
+            color: var(--shape-yellow);
+            margin-bottom: 15px;
+            animation: blink 1s steps(1, end) infinite; /* Blinking title */
+        }
+
+        .overlay p {
+            margin: 10px 0;
+            font-size: 1em;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+
+        /* Keyframes for blinking effect */
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+
+        /* --- Responsive Adjustments --- */
+        @media (max-width: 600px) {
+            :root {
+                --game-board-size: 90vw;
+            }
+            body {
+                padding: 10px;
+            }
+            #game-title {
+                font-size: 1.2em;
+            }
+            #game-header {
+                font-size: 0.6em;
+                box-shadow: 2px 2px 0 var(--color-border);
+            }
+            .overlay h2 {
+                font-size: 1.4em;
+            }
+            .overlay p {
+                font-size: 0.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <h1 id="game-title">SHAPE MATCH<br> ARCADE EDITION</h1>
+
+    <div id="game-header">
+        <div id="level-display">LEVEL: 1</div>
+        <div id="score-display">SCORE: 0</div>
+    </div>
+
+    <div id="game-container">
+        <div id="game-board">
+            </div>
+
+        <div id="ready-screen" class="overlay">
+            <h2>START GAME</h2>
+            <p>TUTORIAL:</p>
+            <p>MATCH 3+ SHAPES.</p>
+            <p>USE MOUSE OR FINGER TO DRAG.</p>
+            <br>
+            <p>CLICK TO BEGIN</p>
+        </div>
+
+        <div id="continue-screen" class="overlay hidden">
+            <h2 id="continue-title">LEVEL COMPLETE!</h2>
+            <p>TARGET SCORE REACHED.</p>
+            <p>PREPARING LEVEL <span id="next-level-num">2</span>...</p>
+            <br>
+            <p>CLICK TO CONTINUE</p>
+        </div>
+    </div>
+
+    <script>
+        // JAVASCRIPT LOGIC
+
+        // --- Configuration and State ---
+        const config = {
+            initialCols: 8,
+            initialRows: 8,
+            maxSize: 30,
+            shapes: ['square', 'circle', 'triangle', 'diamond'],
+            matchMin: 3,
+            scorePerMatch: 10,
+            levelScoreGoal: 100, // Base goal, increases per level
+        };
+
+        const state = {
+            board: [],
+            rows: config.initialRows,
+            cols: config.initialCols,
+            score: 0,
+            level: 1,
+            isPaused: true,
+            draggedGem: null,
+            dragStartX: 0,
+            dragStartY: 0,
+            dragThreshold: 20, // Min pixels to register a drag as a swap
+        };
+
+        // --- DOM Elements ---
+        const gameBoard = document.getElementById('game-board');
+        const scoreDisplay = document.getElementById('score-display');
+        const levelDisplay = document.getElementById('level-display');
+        const readyScreen = document.getElementById('ready-screen');
+        const continueScreen = document.getElementById('continue-screen');
+        const nextLevelNum = document.getElementById('next-level-num');
+        const root = document.documentElement;
+
+        // --- Core Game Functions ---
+
+        /**
+         * Initializes or re-initializes the game board based on current state.rows/cols.
+         */
+        function initBoard() {
+            root.style.setProperty('--board-cols', state.cols);
+            root.style.setProperty('--board-rows', state.rows);
+            gameBoard.innerHTML = ''; // Clear existing board
+            state.board = [];
+
+            for (let r = 0; r < state.rows; r++) {
+                state.board[r] = [];
+                for (let c = 0; c < state.cols; c++) {
+                    let shape = getRandomShape(r, c);
+                    state.board[r][c] = shape;
+                    renderGem(r, c, shape);
+                }
+            }
+        }
+
+        /**
+         * Gets a shape that doesn't create an immediate match of 3 or more.
+         */
+        function getRandomShape(r, c) {
+            let shape;
+            let forbidden = [];
+
+            if (c >= 2) {
+                if (state.board[r][c-1] === state.board[r][c-2]) {
+                    forbidden.push(state.board[r][c-1]);
+                }
+            }
+
+            if (r >= 2) {
+                if (state.board[r-1][c] === state.board[r-2][c]) {
+                    if (!forbidden.includes(state.board[r-1][c])) {
+                        forbidden.push(state.board[r-1][c]);
+                    }
+                }
+            }
+
+            do {
+                shape = config.shapes[Math.floor(Math.random() * config.shapes.length)];
+            } while (forbidden.includes(shape));
+
+            return shape;
+        }
+
+        /**
+         * Renders a gem at (r, c) on the DOM.
+         */
+        function renderGem(r, c, shape) {
+            const gemElement = document.createElement('div');
+            gemElement.className = `gem ${shape}`;
+            gemElement.dataset.row = r;
+            gemElement.dataset.col = c;
+            gemElement.style.gridArea = `${r + 1} / ${c + 1}`; 
+
+            // Add an inner div for diamond/triangle styling
+            if (shape === 'diamond' || shape === 'triangle') {
+                const inner = document.createElement('div');
+                inner.className = shape;
+                gemElement.className = 'gem'; 
+                gemElement.appendChild(inner);
+            }
+
+            gameBoard.appendChild(gemElement);
+        }
+
+        /**
+         * Finds the DOM element at a specific grid position.
+         */
+        function getGemElement(r, c) {
+            return gameBoard.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+        }
+
+        /**
+         * Swaps two shapes in the game state and animates the DOM elements.
+         */
+        function swapGems(r1, c1, r2, c2, callback = () => {}) {
+            if (r1 < 0 || r1 >= state.rows || c1 < 0 || c1 >= state.cols ||
+                r2 < 0 || r2 >= state.rows || c2 < 0 || c2 >= state.cols) {
+                return;
+            }
+
+            const gem1 = getGemElement(r1, c1);
+            const gem2 = getGemElement(r2, c2);
+
+            if (!gem1 || !gem2) return;
+
+            // 1. Swap in state
+            [state.board[r1][c1], state.board[r2][c2]] = [state.board[r2][c2], state.board[r1][c1]];
+
+            // 2. Animate and update DOM attributes
+            const animateSwap = (el1, el2, rA, cA, rB, cB) => {
+                const moveX = cB - cA;
+                const moveY = rB - rA;
+
+                el1.style.transform = `translate(calc(${moveX} * 100%), calc(${moveY} * 100%))`;
+                el2.style.transform = `translate(calc(${-moveX} * 100%), calc(${-moveY} * 100%))`;
+
+                setTimeout(() => {
+                    el1.style.transform = ''; 
+                    el2.style.transform = '';
+
+                    el1.style.gridArea = `${rB + 1} / ${cB + 1}`;
+                    el2.style.gridArea = `${rA + 1} / ${cA + 1}`;
+
+                    el1.dataset.row = rB;
+                    el1.dataset.col = cB;
+                    el2.dataset.row = rA;
+                    el2.dataset.col = cA;
+
+                    callback();
+                }, 150); 
+            };
+
+            animateSwap(gem1, gem2, r1, c1, r2, c2);
+        }
+
+        /**
+         * Checks the entire board for 3+ matches, clears them, and updates score.
+         */
+        function checkAndClearMatches() {
+            let matchedGems = new Set();
+            let scoreUpdate = 0;
+
+            const addMatch = (r, c) => matchedGems.add(`${r},${c}`);
+
+            // 1. Find Matches
+            for (let r = 0; r < state.rows; r++) {
+                for (let c = 0; c < state.cols; c++) {
+                    const shape = state.board[r][c];
+
+                    if (!shape) continue; // Skip already cleared spots
+
+                    // Check Horizontal
+                    let hCount = 1;
+                    while (c + hCount < state.cols && state.board[r][c + hCount] === shape) {
+                        hCount++;
+                    }
+                    if (hCount >= config.matchMin) {
+                        for (let k = 0; k < hCount; k++) addMatch(r, c + k);
+                    }
+
+                    // Check Vertical
+                    let vCount = 1;
+                    while (r + vCount < state.rows && state.board[r + vCount][c] === shape) {
+                        vCount++;
+                    }
+                    if (vCount >= config.matchMin) {
+                        for (let k = 0; k < vCount; k++) addMatch(r + k, c);
+                    }
+                }
+            }
+
+            // 2. Clear Matches
+            if (matchedGems.size > 0) {
+                scoreUpdate = matchedGems.size * config.scorePerMatch;
+                state.score += scoreUpdate;
+
+                matchedGems.forEach(coords => {
+                    const [r, c] = coords.split(',').map(Number);
+                    const gemElement = getGemElement(r, c);
+
+                    state.board[r][c] = null; 
+
+                    if (gemElement) {
+                        // Retro clear: scale to 0 and remove
+                        gemElement.style.transform = 'scale(0)';
+                        setTimeout(() => gemElement.remove(), 150);
+                    }
+                });
+
+                updateUI();
+                
+                // Check for Level Up
+                if (state.score >= config.levelScoreGoal * state.level) {
+                    levelUp();
+                } else {
+                    // Re-initialize board after a short delay to keep the demo playable
+                    // (A full game would implement gravity and refilling here)
+                    setTimeout(initBoard, 200); 
+                }
+                
+                return true;
+            }
+
+            return false;
+        }
+
+        /**
+         * Handles the level-up process.
+         */
+        function levelUp() {
+            state.isPaused = true;
+            state.level++;
+            
+            // Increase board size, up to max
+            state.rows = Math.min(config.maxSize, state.rows + 1);
+            state.cols = Math.min(config.maxSize, state.cols + 1);
+
+            nextLevelNum.textContent = state.level;
+            document.getElementById('continue-title').textContent = `LEVEL ${state.level - 1} CLEAR!`;
+            continueScreen.classList.remove('hidden');
+        }
+
+        /**
+         * Updates the score and level displays.
+         */
+        function updateUI() {
+            scoreDisplay.textContent = `SCORE: ${state.score}`;
+            levelDisplay.textContent = `LEVEL: ${state.level}`;
+        }
+
+        // --- Input and Event Handlers (Desktop & Mobile) ---
+
+        /**
+         * Starts the drag/tap gesture.
+         */
+        function handleDragStart(event) {
+            if (state.isPaused) return;
+
+            const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+            const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+            const target = event.target.closest('.gem');
+            if (target) {
+                state.draggedGem = target;
+                state.dragStartX = clientX;
+                state.dragStartY = clientY;
+                event.preventDefault(); 
+                state.draggedGem.style.zIndex = 5; 
+            }
+        }
+
+        /**
+         * Ends the drag/tap gesture and attempts a swap.
+         */
+        function handleDragEnd(event) {
+            if (state.isPaused || !state.draggedGem) return;
+
+            const clientX = event.changedTouches ? event.changedTouches[0].clientX : event.clientX;
+            const clientY = event.changedTouches ? event.changedTouches[0].clientY : event.clientY;
+
+            const r1 = parseInt(state.draggedGem.dataset.row);
+            const c1 = parseInt(state.draggedGem.dataset.col);
+
+            const dx = clientX - state.dragStartX;
+            const dy = clientY - state.dragStartY;
+            let r2 = r1, c2 = c1;
+
+            state.draggedGem.style.zIndex = 1; 
+
+            // Determine swap direction based on longest/strongest drag
+            if (Math.abs(dx) > state.dragThreshold || Math.abs(dy) > state.dragThreshold) {
+                if (Math.abs(dx) > Math.abs(dy)) { // Horizontal drag
+                    c2 += (dx > 0 ? 1 : -1);
+                } else { // Vertical drag
+                    r2 += (dy > 0 ? 1 : -1);
+                }
+
+                // Attempt the swap
+                if (r1 !== r2 || c1 !== c2) {
+                    swapGems(r1, c1, r2, c2, () => {
+                        const matched = checkAndClearMatches();
+                        if (!matched) {
+                             // If no match, swap back
+                             setTimeout(() => swapGems(r2, c2, r1, c1), 200);
+                        }
+                    });
+                }
+            }
+
+            state.draggedGem = null;
+        }
+
+        /**
+         * Handles the click on any overlay screen to unpause or continue.
+         */
+        function handleOverlayClick(event) {
+            if (readyScreen.classList.contains('hidden') && continueScreen.classList.contains('hidden')) return;
+
+            if (!readyScreen.classList.contains('hidden')) {
+                readyScreen.classList.add('hidden');
+                state.isPaused = false;
+            } else if (!continueScreen.classList.contains('hidden')) {
+                continueScreen.classList.add('hidden');
+                state.isPaused = false;
+                initBoard(); 
+                updateUI();
+            }
+        }
+
+        // --- Initialization and Event Listeners ---
+
+        /**
+         * Sets up the game and listeners.
+         */
+        function setupGame() {
+            initBoard();
+            updateUI();
+
+            // Overlay listeners - These already cover the entire game container!
+            readyScreen.addEventListener('click', handleOverlayClick);
+            continueScreen.addEventListener('click', handleOverlayClick);
+            // Additionally attach touchstart to handle mobile unpausing
+            readyScreen.addEventListener('touchstart', handleOverlayClick);
+            continueScreen.addEventListener('touchstart', handleOverlayClick);
+
+
+            // Drag/Touch listeners on the game container for delegation
+            const container = document.getElementById('game-container');
+            container.addEventListener('mousedown', handleDragStart);
+            container.addEventListener('mouseup', handleDragEnd);
+            container.addEventListener('mouseleave', handleDragEnd); 
+
+            // Mobile/Touch listeners
+            container.addEventListener('touchstart', handleDragStart, { passive: false });
+            container.addEventListener('touchend', handleDragEnd);
+        }
+
+        setupGame();
+    </script>
+</body>
+</html>
