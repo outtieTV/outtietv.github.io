@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tetris Clone</title>
-    <!-- Use Inter font from Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         /* General Reset and Styling */
@@ -68,6 +67,8 @@
         }
 
         #tetris-canvas {
+            /* Ensures canvas is the touch target */
+            touch-action: none; 
             display: block;
             background-color: #0d0d18; /* Very dark canvas background */
         }
@@ -452,6 +453,7 @@
                 }
             }
             currentPiece.matrix = rotatedMatrix;
+            draw(); // Redraw immediately after successful rotation
         };
 
         /**
@@ -565,7 +567,7 @@
             }
         };
 
-        // --- Input Handling ---
+        // --- Input Handling (Keyboard) ---
 
         document.addEventListener('keydown', event => {
             if (isPaused || event.repeat) return; // Prevent continuous press from triggering movement multiple times per frame
@@ -603,6 +605,72 @@
                 isSoftDropping = false; // Stop soft drop when key is released
             }
         });
+
+        // --- Input Handling (Mobile Touch Controls) ---
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchStartTime = 0;
+        const TOUCH_MOVE_THRESHOLD_X = 50; // Pixels for one horizontal move
+        const TOUCH_MOVE_THRESHOLD_Y = 50; // Pixels for soft drop
+        const TAP_MAX_DISTANCE = 10; // Max distance for a tap (for rotation)
+        const TAP_MAX_TIME = 250; // Max time in ms for a tap
+
+        canvas.addEventListener('touchstart', (event) => {
+            if (isPaused || event.touches.length !== 1) return;
+            event.preventDefault(); // Prevent scrolling/zooming
+
+            const touch = event.touches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            touchStartTime = Date.now();
+            
+            // Immediately start soft drop if dragging down
+            isSoftDropping = false; // Reset
+        });
+
+        canvas.addEventListener('touchmove', (event) => {
+            if (isPaused || event.touches.length !== 1) return;
+            event.preventDefault();
+
+            const touch = event.touches[0];
+            const deltaX = touch.clientX - touchStartX;
+            const deltaY = touch.clientY - touchStartY;
+            
+            // 1. Horizontal Move (Left/Right)
+            if (Math.abs(deltaX) > TOUCH_MOVE_THRESHOLD_X) {
+                const moveDirection = deltaX > 0 ? 1 : -1;
+                movePiece(moveDirection, 0);
+                // Update start X to the current position to allow continuous drag
+                touchStartX = touch.clientX; 
+            }
+
+            // 2. Vertical Soft Drop (Down)
+            if (deltaY > TOUCH_MOVE_THRESHOLD_Y && !isSoftDropping) {
+                isSoftDropping = true;
+                movePiece(0, 1); // Instant drop
+                dropCounter = 0; // Reset counter for rapid drops
+            }
+            // Note: Dragging up doesn't do anything for simplicity
+            
+            draw();
+        });
+
+        canvas.addEventListener('touchend', (event) => {
+            if (isPaused) return;
+
+            const touchDuration = Date.now() - touchStartTime;
+            const deltaX = Math.abs(event.changedTouches[0].clientX - touchStartX);
+            const deltaY = Math.abs(event.changedTouches[0].clientY - touchStartY);
+
+            // 1. Tap for Rotation (if movement was minimal)
+            if (touchDuration < TAP_MAX_TIME && deltaX < TAP_MAX_DISTANCE && deltaY < TAP_MAX_DISTANCE) {
+                rotatePiece();
+            }
+
+            // 2. Stop Soft Drop
+            isSoftDropping = false;
+        });
+
 
         // Retry button click handler
         retryButton.addEventListener('click', togglePlay);
