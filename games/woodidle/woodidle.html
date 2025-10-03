@@ -4,7 +4,204 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lumberjack Legends - Retro Woodcutter</title>
-    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Retro-Themed CSS for Lumberjack Legends */
+        :root {
+            --retro-green: #33cc33;
+            --dark-green: #004d00;
+            --background-color: #000;
+            --font-family: 'Courier New', Courier, monospace;
+        }
+
+        body {
+            background-color: var(--background-color);
+            color: var(--retro-green);
+            font-family: var(--font-family);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            font-size: 16px;
+            /* Optional: Simulates CRT scanlines effect */
+            background-image: linear-gradient(rgba(0, 0, 0, 0.4) 1px, transparent 1px);
+            background-size: 100% 2px;
+        }
+
+        #game-container {
+            width: 90%;
+            max-width: 600px;
+            border: 3px solid var(--retro-green);
+            box-shadow: 0 0 15px var(--retro-green);
+            padding: 15px;
+            margin: 20px;
+        }
+
+        /* Title */
+        #game-title {
+            text-align: center;
+            color: var(--retro-green);
+            text-shadow: 0 0 5px var(--retro-green);
+            font-size: 2em;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+
+        /* Top Bar: Level and XP */
+        #top-bar {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px dashed var(--retro-green);
+            margin-bottom: 15px;
+        }
+        #xp-display, #level-display {
+            font-weight: bold;
+        }
+
+        /* Main Area */
+        #main-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        /* Tree Section */
+        #tree-section {
+            text-align: center;
+        }
+
+        #tree-image-placeholder {
+            width: 150px;
+            height: 150px;
+            background-color: var(--dark-green);
+            border: 2px solid var(--retro-green);
+            line-height: 150px;
+            margin: 0 auto 10px;
+            font-size: 0.9em;
+        }
+
+        /* Action Section */
+        #cut-tree-button {
+            background-color: var(--retro-green);
+            color: var(--background-color);
+            border: 2px solid var(--retro-green);
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: var(--font-family);
+            font-weight: bold;
+            font-size: 1.1em;
+            transition: background-color 0.1s;
+            box-shadow: 2px 2px 0 var(--dark-green);
+        }
+        #cut-tree-button:hover:not(:disabled) {
+            background-color: #66ff66;
+        }
+        #cut-tree-button:active:not(:disabled) {
+            box-shadow: none;
+            transform: translate(2px, 2px);
+        }
+        #cut-tree-button:disabled {
+            cursor: not-allowed;
+            background-color: var(--dark-green);
+            color: #666;
+            border-color: var(--dark-green);
+        }
+
+        /* Timer Bar */
+        #timer-bar-container {
+            width: 100%;
+            max-width: 300px;
+            height: 15px;
+            background-color: var(--dark-green);
+            border: 1px solid var(--retro-green);
+            margin-top: 10px;
+        }
+
+        #timer-bar {
+            height: 100%;
+            width: 0%;
+            background-color: var(--retro-green);
+            transition: none; /* Removed transition for crisp timer updates */
+        }
+
+        #timer-text {
+            margin-top: 5px;
+            font-size: 0.9em;
+        }
+
+        /* Tree Select Buttons */
+        #tree-select-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .tree-button {
+            background-color: var(--dark-green);
+            color: var(--retro-green);
+            border: 1px solid var(--retro-green);
+            padding: 5px 10px;
+            cursor: pointer;
+            font-family: var(--font-family);
+            font-size: 0.8em;
+        }
+        .tree-button:hover:not(:disabled) {
+            background-color: var(--retro-green);
+            color: var(--background-color);
+        }
+        .tree-button:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+            background-color: #1a1a1a;
+        }
+        .tree-button.active {
+            background-color: var(--retro-green);
+            color: var(--background-color);
+            font-weight: bold;
+        }
+
+        /* Bottom Bar: Axe and Logs */
+        #bottom-bar {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0 0;
+            border-top: 1px dashed var(--retro-green);
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+
+        /* Notifications */
+        #notifications {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            text-align: center;
+            padding: 5px;
+        }
+
+        .notification-message {
+            background-color: rgba(0, 77, 0, 0.9); /* Darker green, semi-transparent */
+            border: 1px solid var(--retro-green);
+            padding: 5px 10px;
+            margin-bottom: 5px;
+            display: inline-block;
+            box-shadow: 0 0 5px var(--retro-green);
+            animation: fadeout 3s forwards;
+            opacity: 1;
+        }
+
+        @keyframes fadeout {
+            0% { opacity: 1; }
+            85% { opacity: 1; }
+            100% { opacity: 0; display: none; }
+        }
+    </style>
 </head>
 <body>
     <div id="game-container">
@@ -43,6 +240,295 @@
         <div id="notifications"></div>
     </div>
 
-    <script src="game.js"></script>
+    <script>
+        // --- Game Data Models ---
+
+        // Define tree properties
+        const TREES = {
+            regular: { name: 'Regular', requiredLevel: 1, baseTime: 3000, xp: 25 },
+            oak:     { name: 'Oak',     requiredLevel: 15, baseTime: 4500, xp: 35 },
+            willow:  { name: 'Willow',  requiredLevel: 30, baseTime: 6000, xp: 50 },
+            yew:     { name: 'Yew',     requiredLevel: 60, baseTime: 8000, xp: 70 },
+            redwood: { name: 'Redwood', requiredLevel: 90, baseTime: 12000, xp: 100 }
+        };
+
+        // Define axe properties (speedBoost is a percentage reduction in cut time)
+        const AXES = [
+            { name: 'Stone Axe',    requiredLevel: 1, speedBoost: 0.00 }, // 0% faster
+            { name: 'Bronze Axe',   requiredLevel: 10, speedBoost: 0.10 }, // 10% faster
+            { name: 'Iron Axe',     requiredLevel: 25, speedBoost: 0.20 }, // 20% faster
+            { name: 'Steel Axe',    requiredLevel: 45, speedBoost: 0.35 }, // 35% faster
+            { name: 'Diamond Axe',  requiredLevel: 70, speedBoost: 0.50 }, // 50% faster
+            { name: 'Ultimate Axe', requiredLevel: 95, speedBoost: 0.65 }  // 65% faster
+        ];
+
+        // --- Leveling Formula ---
+        function calculateXPForLevel(level) {
+            if (level >= 99) return Infinity;
+            // XP to reach the *start* of the next level (level + 1)
+            const baseXP = 83;
+            const exponent = 1.05;
+            return Math.floor(baseXP * (level - 1) * Math.pow(level, exponent)) + baseXP;
+        }
+
+        // --- Game State ---
+        let game = {
+            level: 1,
+            currentXP: 0,
+            logs: 0,
+            currentTree: 'regular',
+            currentAxe: AXES[0],
+            isCutting: false,
+            cutTimer: null,
+            totalCutTime: 0,
+            autoChop: true, // Flag for idle functionality
+        };
+
+        // --- DOM Elements ---
+        const D = {
+            levelDisplay: document.getElementById('level-display'),
+            xpDisplay: document.getElementById('xp-display'),
+            currentTreeName: document.getElementById('current-tree-name'),
+            requiredLevel: document.getElementById('required-level'),
+            axeDisplay: document.getElementById('axe-display'),
+            logsDisplay: document.getElementById('logs-display'),
+            cutButton: document.getElementById('cut-tree-button'),
+            timerBar: document.getElementById('timer-bar'),
+            timerText: document.getElementById('timer-text'),
+            treeSelectButtons: document.getElementById('tree-select-buttons'),
+            notifications: document.getElementById('notifications'),
+            treeImagePlaceholder: document.getElementById('tree-image-placeholder')
+        };
+
+        // --- Game Logic Functions ---
+
+        /** Loads game state from localStorage or initializes default. */
+        function loadGame() {
+            const savedGame = localStorage.getItem('lumberjackLegends');
+            if (savedGame) {
+                const loadedData = JSON.parse(savedGame);
+                Object.assign(game, loadedData);
+                // Ensure the currentAxe is the correct object based on the loaded level
+                game.currentAxe = determineBestAxe(game.level);
+            }
+            createTreeButtons();
+            updateDisplay();
+        }
+
+        /** Saves game state to localStorage. */
+        function saveGame() {
+            localStorage.setItem('lumberjackLegends', JSON.stringify({
+                level: game.level,
+                currentXP: game.currentXP,
+                logs: game.logs,
+                currentTree: game.currentTree,
+            }));
+        }
+
+        /** Updates all visible game elements. */
+        function updateDisplay() {
+            // Level & XP
+            const xpNeeded = calculateXPForLevel(game.level);
+            const xpRemaining = xpNeeded - game.currentXP;
+
+            D.levelDisplay.textContent = `Level: ${game.level} 🌳`;
+            if (game.level < 99) {
+                D.xpDisplay.textContent = `XP to Lvl ${game.level + 1}: ${xpRemaining.toLocaleString()}`;
+            } else {
+                D.xpDisplay.textContent = 'MAX LEVEL! (99)';
+            }
+
+            // Tree Info
+            const treeData = TREES[game.currentTree];
+            D.currentTreeName.textContent = treeData.name;
+            D.requiredLevel.textContent = treeData.requiredLevel;
+            D.treeImagePlaceholder.textContent = `[${treeData.name} Tree]`;
+
+            // Axe & Logs
+            const boostPercentage = (game.currentAxe.speedBoost * 100).toFixed(0);
+            D.axeDisplay.textContent = `Axe: ${game.currentAxe.name} (${boostPercentage}% speed boost)`;
+            D.logsDisplay.textContent = `Logs: ${game.logs.toLocaleString()}`;
+
+            // Update button states
+            const canChopTree = game.level >= treeData.requiredLevel;
+            D.cutButton.disabled = game.isCutting;
+            D.cutButton.textContent = game.isCutting ? 'Chopping...' : (canChopTree ? 'Chop Tree!' : `Need Lvl ${treeData.requiredLevel}`);
+
+            // Update tree buttons
+            document.querySelectorAll('.tree-button').forEach(btn => {
+                const treeKey = btn.dataset.tree;
+                const reqLvl = TREES[treeKey].requiredLevel;
+                // Only enable button if level requirement is met
+                btn.disabled = game.level < reqLvl;
+                btn.classList.toggle('active', treeKey === game.currentTree);
+            });
+
+            saveGame();
+        }
+
+        /** Processes experience gain and checks for level up. */
+        function gainXP(amount) {
+            game.currentXP += amount;
+            let leveledUp = false;
+
+            while (game.level < 99 && game.currentXP >= calculateXPForLevel(game.level)) {
+                game.currentXP -= calculateXPForLevel(game.level); // Subtract XP cost
+                game.level++;
+                leveledUp = true;
+            }
+
+            if (leveledUp) {
+                const oldAxe = game.currentAxe.name;
+                game.currentAxe = determineBestAxe(game.level);
+
+                if (game.currentAxe.name !== oldAxe) {
+                    notify(`Axe unlocked! You are now using the ${game.currentAxe.name}! ⛏️`);
+                }
+                notify(`Congratulations! You reached Woodcutting Level ${game.level}! 🎉`);
+                // Re-evaluate tree selection based on new level
+                selectTree(game.currentTree);
+            }
+
+            updateDisplay();
+        }
+
+        /** Finds the best axe the player can currently use. */
+        function determineBestAxe(level) {
+            let bestAxe = AXES[0];
+            for (const axe of AXES) {
+                if (level >= axe.requiredLevel) {
+                    bestAxe = axe;
+                } else {
+                    break;
+                }
+            }
+            return bestAxe;
+        }
+
+        /** Calculates the actual time to cut based on tree and axe. */
+        function getCalculatedCutTime() {
+            const treeData = TREES[game.currentTree];
+            // Time = Base Time * (1 - speedBoost)
+            return treeData.baseTime * (1 - game.currentAxe.speedBoost);
+        }
+
+        /** Starts the woodcutting action. */
+        function startCutting() {
+            if (game.isCutting || game.level < TREES[game.currentTree].requiredLevel) return;
+
+            game.isCutting = true;
+            game.totalCutTime = getCalculatedCutTime();
+            let timeElapsed = 0;
+            const interval = 50; // Update every 50ms
+
+            D.cutButton.disabled = true;
+            D.timerText.textContent = `Chopping ${TREES[game.currentTree].name}...`;
+            
+            // Clear any old timer just in case
+            if (game.cutTimer) clearInterval(game.cutTimer);
+
+            game.cutTimer = setInterval(() => {
+                timeElapsed += interval;
+                const progress = (timeElapsed / game.totalCutTime) * 100;
+
+                D.timerBar.style.width = `${Math.min(100, progress)}%`;
+
+                if (timeElapsed >= game.totalCutTime) {
+                    clearInterval(game.cutTimer);
+                    game.cutTimer = null;
+                    finishCutting();
+                }
+            }, interval);
+            updateDisplay();
+        }
+
+        /** Finishes the woodcutting action. */
+        function finishCutting() {
+            game.isCutting = false;
+            const treeData = TREES[game.currentTree];
+
+            game.logs++;
+            gainXP(treeData.xp);
+
+            D.timerBar.style.width = '0%';
+            D.timerText.textContent = `Got a ${treeData.name} log! Ready to chop!`;
+            D.cutButton.disabled = false;
+            notify(`+1 ${treeData.name} Log, +${treeData.xp} XP`);
+
+            // Check if player meets the requirements for the current tree before auto-restarting
+            if (game.autoChop && game.level >= treeData.requiredLevel) {
+                // 500ms delay before next chop to make it feel like an action loop
+                setTimeout(startCutting, 500); 
+            }
+            updateDisplay();
+        }
+
+        /** Switches the currently selected tree. */
+        function selectTree(treeKey) {
+            const treeData = TREES[treeKey];
+
+            if (game.level < treeData.requiredLevel) {
+                notify(`You need Woodcutting Level ${treeData.requiredLevel} to chop ${treeData.name}.`);
+                return;
+            }
+
+            // --- FIX: STOP CHOPPING WHEN SWITCHING TREES ---
+            if (game.isCutting) {
+                clearInterval(game.cutTimer);
+                game.cutTimer = null;
+                game.isCutting = false;
+                D.timerBar.style.width = '0%';
+                D.timerText.textContent = `Switched tree. Ready to chop ${treeData.name}!`;
+            }
+
+            game.currentTree = treeKey;
+            D.cutButton.disabled = false; // Re-enable button after potential stop
+            updateDisplay();
+        }
+
+        /** Creates the tree selection buttons dynamically. */
+        function createTreeButtons() {
+            D.treeSelectButtons.innerHTML = '';
+            for (const key in TREES) {
+                const tree = TREES[key];
+                const button = document.createElement('button');
+                button.className = 'tree-button';
+                button.dataset.tree = key;
+                button.textContent = `${tree.name} (Lvl ${tree.requiredLevel})`;
+                
+                // Add click listener to call the selectTree function
+                button.addEventListener('click', () => selectTree(key));
+                D.treeSelectButtons.appendChild(button);
+            }
+        }
+
+        /** Displays a temporary notification message. */
+        function notify(message) {
+            const msgElement = document.createElement('div');
+            msgElement.className = 'notification-message';
+            msgElement.textContent = message;
+            D.notifications.appendChild(msgElement);
+
+            // Remove the message after the animation finishes (3.1s)
+            setTimeout(() => {
+                if (msgElement.parentNode) {
+                    msgElement.remove();
+                }
+            }, 3100);
+        }
+
+        // --- Initialization ---
+
+        // Load game on start
+        window.onload = () => {
+            loadGame();
+        };
+
+        // Event Listeners
+        D.cutButton.addEventListener('click', startCutting);
+
+        // Set up an automatic save every 10 seconds
+        setInterval(saveGame, 10000);
+    </script>
 </body>
 </html>
