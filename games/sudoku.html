@@ -267,8 +267,8 @@
 
     <div class="header-controls">
         <div class="difficulty-select" id="difficulty-select">
-            <button data-difficulty="easy">Easy</button>
-            <button data-difficulty="medium" class="active">Medium</button>
+            <button data-difficulty="easy" class="active">Easy</button>
+            <button data-difficulty="medium">Medium</button>
             <button data-difficulty="hard">Hard</button>
         </div>
         <div id="timer">00:00</div>
@@ -318,7 +318,8 @@
         let isGameActive = false;
         let timerInterval = null;
         let timeElapsed = 0;
-        let currentDifficulty = 'medium';
+        // CHANGE 1: Set default difficulty to 'easy'
+        let currentDifficulty = 'easy';
 
         // Stored stats (Personal Best)
         const stats = JSON.parse(localStorage.getItem('sudokuStats')) || {
@@ -430,38 +431,76 @@
         };
         
         /**
-         * Creates a playable puzzle by removing cells.
+         * Creates a playable puzzle by removing cells, ensuring one number per 3x3 block.
          * @param {number[][]} solution - The full solved grid.
          * @param {string} difficulty - 'easy', 'medium', or 'hard'.
          * @returns {number[][]} The puzzle grid.
          */
         const createPuzzle = (solution, difficulty) => {
-            // Number of cells to remove (a common heuristic)
-            let cellsToRemove;
+            // CHANGE 2: Adjust target removals (fewer pre-entered numbers overall)
+            let cellsToKeep;
             switch (difficulty) {
-                case 'easy': cellsToRemove = 35; break; // Leaves ~46 pre-filled
-                case 'medium': cellsToRemove = 45; break; // Leaves ~36 pre-filled
-                case 'hard': cellsToRemove = 55; break; // Leaves ~26 pre-filled
-                default: cellsToRemove = 45;
+                case 'easy': cellsToKeep = 38; break; // Leaves ~38 pre-filled
+                case 'medium': cellsToKeep = 30; break; // Leaves ~30 pre-filled
+                case 'hard': cellsToKeep = 24; break; // Leaves ~24 pre-filled (Challenging)
+                default: cellsToKeep = 30;
             }
 
             const puzzle = solution.map(row => [...row]); // Deep copy
-            const positions = Array.from({ length: TILE_COUNT }, (_, i) => i);
-            positions.sort(() => Math.random() - 0.5); // Randomize removal order
+            let keptPositions = new Set();
 
-            let removedCount = 0;
-            for (const index of positions) {
-                if (removedCount >= cellsToRemove) break;
+            // CHANGE 3: Enforce AT LEAST ONE number in each 3x3 block
+            for (let blockR = 0; blockR < 3; blockR++) {
+                for (let blockC = 0; blockC < 3; blockC++) {
+                    const blockPositions = [];
+                    for (let r = 0; r < 3; r++) {
+                        for (let c = 0; c < 3; c++) {
+                            const row = blockR * 3 + r;
+                            const col = blockC * 3 + c;
+                            blockPositions.push(row * GRID_SIZE + col);
+                        }
+                    }
+                    
+                    // Randomly select one position in the block to keep
+                    const randomIndex = blockPositions[Math.floor(Math.random() * 9)];
+                    keptPositions.add(randomIndex);
+                }
+            }
 
+            // Remove numbers down to the target count
+            const allPositions = Array.from({ length: TILE_COUNT }, (_, i) => i).sort(() => Math.random() - 0.5);
+
+            let currentKeptCount = keptPositions.size;
+            
+            for (const index of allPositions) {
                 const r = Math.floor(index / GRID_SIZE);
                 const c = index % GRID_SIZE;
-                const temp = puzzle[r][c];
-                puzzle[r][c] = EMPTY_CELL;
-                removedCount++;
 
-                // **Simplified Single Solution Check:** // In a real game, you need a multi-solution checker, but for a single-file implementation, we skip it for brevity.
-                // This means some generated puzzles *might* technically have multiple solutions, but the core logic is there.
+                if (keptPositions.has(index)) {
+                    // Already marked to be kept for the 3x3 rule
+                    continue;
+                }
+                
+                if (currentKeptCount < cellsToKeep) {
+                    // Keep the number if we're below the target count
+                    keptPositions.add(index);
+                    currentKeptCount++;
+                } else {
+                    // Remove the number
+                    puzzle[r][c] = EMPTY_CELL;
+                }
             }
+            
+            // Final removal of numbers not in the kept set
+            for (let i = 0; i < TILE_COUNT; i++) {
+                if (!keptPositions.has(i)) {
+                    const r = Math.floor(i / GRID_SIZE);
+                    const c = i % GRID_SIZE;
+                    puzzle[r][c] = EMPTY_CELL;
+                }
+            }
+
+            // The resulting puzzle will have exactly or slightly more than `cellsToKeep` (due to the 9 mandatory seeds)
             return puzzle;
         };
 
@@ -469,6 +508,7 @@
         const startTimer = () => {
             if (timerInterval) clearInterval(timerInterval);
             timeElapsed = 0;
+            updateTimerDisplay(); // Reset display immediately
             timerInterval = setInterval(() => {
                 timeElapsed++;
                 updateTimerDisplay();
@@ -542,9 +582,6 @@
                     }
                     tile.appendChild(notesContainer);
                 }
-                
-                // Highlight incorrect answers (only for user-entered cells and only after a win/loss check, or can be done dynamically)
-                // Simplified: We'll highlight when checking the solution or on a "solve" click.
             }
         };
         
@@ -615,6 +652,8 @@
             
             // 5. Start timer
             startTimer();
+            // Show start button text change only after the first game has run
+            startButtonEl.textContent = 'RESTART';
             alert(`New ${currentDifficulty.toUpperCase()} game started!`);
         };
 
@@ -767,10 +806,7 @@
             if (isFull) {
                 if (isSolved()) {
                     handleWin();
-                } else {
-                    // All cells filled, but not solved (can optionally show incorrect answers)
-                    // For now, let the user continue.
-                }
+                } 
             }
         };
 
@@ -851,7 +887,8 @@
                 document.querySelectorAll('#difficulty-select button').forEach(btn => btn.classList.remove('active'));
                 e.target.classList.add('active');
                 currentDifficulty = newDifficulty;
-                // Automatically start a new game when difficulty changes after the first game starts
+                
+                // Only automatically start/restart if a game has been started before
                 if(startButtonEl.textContent === 'RESTART') {
                     setupNewGame();
                 }
@@ -859,10 +896,7 @@
         });
         
         // Main Action Buttons
-        startButtonEl.addEventListener('click', () => {
-            setupNewGame();
-            startButtonEl.textContent = 'RESTART';
-        });
+        startButtonEl.addEventListener('click', setupNewGame);
         nextMapButtonEl.addEventListener('click', setupNewGame);
         solveButtonEl.addEventListener('click', handleSolve);
         
