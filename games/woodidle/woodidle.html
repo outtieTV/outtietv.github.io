@@ -35,6 +35,7 @@
             box-shadow: 0 0 15px var(--retro-green);
             padding: 15px;
             margin: 20px;
+            position: relative; /* Needed for inventory positioning */
         }
 
         /* Title */
@@ -123,7 +124,7 @@
             height: 100%;
             width: 0%;
             background-color: var(--retro-green);
-            transition: none; /* Removed transition for crisp timer updates */
+            transition: none;
         }
 
         #timer-text {
@@ -172,6 +173,55 @@
             border-top: 1px dashed var(--retro-green);
             margin-top: 15px;
             font-size: 0.9em;
+            position: relative; /* Needed for inventory button */
+        }
+
+        /* Inventory Toggle Button */
+        #inventory-toggle-button {
+            position: absolute;
+            bottom: 5px;
+            right: 0;
+            background: none;
+            border: 1px solid var(--retro-green);
+            color: var(--retro-green);
+            padding: 2px 5px;
+            cursor: pointer;
+            font-family: var(--font-family);
+            font-size: 0.8em;
+            transform: translateY(100%); /* Position below the bottom bar */
+        }
+        #inventory-toggle-button:hover {
+            background-color: var(--dark-green);
+        }
+
+        /* Inventory Window */
+        #inventory {
+            position: absolute;
+            bottom: 30px; /* Above the toggle button */
+            right: 0;
+            width: 200px;
+            max-height: 250px;
+            overflow-y: auto;
+            background-color: var(--dark-green);
+            border: 2px solid var(--retro-green);
+            padding: 10px;
+            box-shadow: 0 0 10px var(--retro-green);
+            display: none; /* Hidden by default */
+            z-index: 10;
+        }
+        #inventory.open {
+            display: block;
+        }
+        #inventory h4 {
+            margin: 0 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 1px dashed var(--retro-green);
+            text-align: center;
+        }
+        .log-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
         }
 
         /* Notifications */
@@ -186,7 +236,7 @@
         }
 
         .notification-message {
-            background-color: rgba(0, 77, 0, 0.9); /* Darker green, semi-transparent */
+            background-color: rgba(0, 77, 0, 0.9);
             border: 1px solid var(--retro-green);
             padding: 5px 10px;
             margin-bottom: 5px;
@@ -208,23 +258,23 @@
         <h1 id="game-title">Lumberjack Legends</h1>
 
         <div id="top-bar">
-            <span id="xp-display">XP to Lvl 2: 83</span>
-            <span id="level-display">Level: 1 🌳</span>
+            <span id="xp-display"></span>
+            <span id="level-display"></span>
         </div>
 
         <div id="main-area">
             <div id="tree-section">
                 <div id="tree-image-placeholder">[Tree Image Here]</div>
                 <div id="tree-info">
-                    <p>Current Tree: <span id="current-tree-name">Regular</span></p>
-                    <p>Required Level: <span id="required-level">1</span></p>
+                    <p>Current Tree: <span id="current-tree-name"></span></p>
+                    <p>Required Level: <span id="required-level"></span></p>
                 </div>
                 <div id="tree-select-buttons">
                     </div>
             </div>
 
             <div id="action-section">
-                <button id="cut-tree-button">Chop Tree!</button>
+                <button id="cut-tree-button"></button>
                 <div id="timer-bar-container">
                     <div id="timer-bar"></div>
                 </div>
@@ -233,8 +283,15 @@
         </div>
 
         <div id="bottom-bar">
-            <p id="axe-display">Axe: Stone Axe (0% speed boost)</p>
-            <p id="logs-display">Logs: 0</p>
+            <p id="axe-display"></p>
+            <p id="logs-display">Total Logs: 0</p>
+            <button id="inventory-toggle-button">Open Inventory</button>
+        </div>
+
+        <div id="inventory">
+            <h4>Log Inventory</h4>
+            <div id="inventory-list">
+                </div>
         </div>
 
         <div id="notifications"></div>
@@ -252,20 +309,19 @@
             redwood: { name: 'Redwood', requiredLevel: 90, baseTime: 12000, xp: 100 }
         };
 
-        // Define axe properties (speedBoost is a percentage reduction in cut time)
+        // Define axe properties
         const AXES = [
-            { name: 'Stone Axe',    requiredLevel: 1, speedBoost: 0.00 }, // 0% faster
-            { name: 'Bronze Axe',   requiredLevel: 10, speedBoost: 0.10 }, // 10% faster
-            { name: 'Iron Axe',     requiredLevel: 25, speedBoost: 0.20 }, // 20% faster
-            { name: 'Steel Axe',    requiredLevel: 45, speedBoost: 0.35 }, // 35% faster
-            { name: 'Diamond Axe',  requiredLevel: 70, speedBoost: 0.50 }, // 50% faster
-            { name: 'Ultimate Axe', requiredLevel: 95, speedBoost: 0.65 }  // 65% faster
+            { name: 'Stone Axe',    requiredLevel: 1, speedBoost: 0.00 },
+            { name: 'Bronze Axe',   requiredLevel: 10, speedBoost: 0.10 },
+            { name: 'Iron Axe',     requiredLevel: 25, speedBoost: 0.20 },
+            { name: 'Steel Axe',    requiredLevel: 45, speedBoost: 0.35 },
+            { name: 'Diamond Axe',  requiredLevel: 70, speedBoost: 0.50 },
+            { name: 'Ultimate Axe', requiredLevel: 95, speedBoost: 0.65 }
         ];
 
         // --- Leveling Formula ---
         function calculateXPForLevel(level) {
             if (level >= 99) return Infinity;
-            // XP to reach the *start* of the next level (level + 1)
             const baseXP = 83;
             const exponent = 1.05;
             return Math.floor(baseXP * (level - 1) * Math.pow(level, exponent)) + baseXP;
@@ -275,13 +331,17 @@
         let game = {
             level: 1,
             currentXP: 0,
-            logs: 0,
+            // Changed logs to be an object for inventory
+            inventory: { 
+                regular: 0, oak: 0, willow: 0, yew: 0, redwood: 0
+            },
             currentTree: 'regular',
             currentAxe: AXES[0],
             isCutting: false,
             cutTimer: null,
             totalCutTime: 0,
-            autoChop: true, // Flag for idle functionality
+            autoChop: true,
+            isInventoryOpen: false,
         };
 
         // --- DOM Elements ---
@@ -297,7 +357,10 @@
             timerText: document.getElementById('timer-text'),
             treeSelectButtons: document.getElementById('tree-select-buttons'),
             notifications: document.getElementById('notifications'),
-            treeImagePlaceholder: document.getElementById('tree-image-placeholder')
+            treeImagePlaceholder: document.getElementById('tree-image-placeholder'),
+            inventoryWindow: document.getElementById('inventory'),
+            inventoryList: document.getElementById('inventory-list'),
+            inventoryToggleButton: document.getElementById('inventory-toggle-button'),
         };
 
         // --- Game Logic Functions ---
@@ -308,11 +371,13 @@
             if (savedGame) {
                 const loadedData = JSON.parse(savedGame);
                 Object.assign(game, loadedData);
-                // Ensure the currentAxe is the correct object based on the loaded level
+                // Ensure inventory structure is complete even if older save is loaded
+                game.inventory = {...game.inventory, ...loadedData.inventory};
                 game.currentAxe = determineBestAxe(game.level);
             }
             createTreeButtons();
             updateDisplay();
+            updateInventoryDisplay();
         }
 
         /** Saves game state to localStorage. */
@@ -320,7 +385,7 @@
             localStorage.setItem('lumberjackLegends', JSON.stringify({
                 level: game.level,
                 currentXP: game.currentXP,
-                logs: game.logs,
+                inventory: game.inventory, // Save inventory object
                 currentTree: game.currentTree,
             }));
         }
@@ -332,11 +397,9 @@
             const xpRemaining = xpNeeded - game.currentXP;
 
             D.levelDisplay.textContent = `Level: ${game.level} 🌳`;
-            if (game.level < 99) {
-                D.xpDisplay.textContent = `XP to Lvl ${game.level + 1}: ${xpRemaining.toLocaleString()}`;
-            } else {
-                D.xpDisplay.textContent = 'MAX LEVEL! (99)';
-            }
+            D.xpDisplay.textContent = game.level < 99 
+                ? `XP to Lvl ${game.level + 1}: ${xpRemaining.toLocaleString()}`
+                : 'MAX LEVEL! (99)';
 
             // Tree Info
             const treeData = TREES[game.currentTree];
@@ -344,26 +407,57 @@
             D.requiredLevel.textContent = treeData.requiredLevel;
             D.treeImagePlaceholder.textContent = `[${treeData.name} Tree]`;
 
-            // Axe & Logs
+            // Axe & Total Logs
             const boostPercentage = (game.currentAxe.speedBoost * 100).toFixed(0);
             D.axeDisplay.textContent = `Axe: ${game.currentAxe.name} (${boostPercentage}% speed boost)`;
-            D.logsDisplay.textContent = `Logs: ${game.logs.toLocaleString()}`;
+            const totalLogs = Object.values(game.inventory).reduce((sum, count) => sum + count, 0);
+            D.logsDisplay.textContent = `Total Logs: ${totalLogs.toLocaleString()}`;
 
             // Update button states
             const canChopTree = game.level >= treeData.requiredLevel;
-            D.cutButton.disabled = game.isCutting;
-            D.cutButton.textContent = game.isCutting ? 'Chopping...' : (canChopTree ? 'Chop Tree!' : `Need Lvl ${treeData.requiredLevel}`);
+            D.cutButton.disabled = game.isCutting || !canChopTree;
+            D.cutButton.textContent = game.isCutting 
+                ? 'Chopping...' 
+                : (canChopTree ? 'Chop Tree!' : `Need Lvl ${treeData.requiredLevel}`);
 
             // Update tree buttons
             document.querySelectorAll('.tree-button').forEach(btn => {
                 const treeKey = btn.dataset.tree;
                 const reqLvl = TREES[treeKey].requiredLevel;
-                // Only enable button if level requirement is met
                 btn.disabled = game.level < reqLvl;
                 btn.classList.toggle('active', treeKey === game.currentTree);
             });
 
             saveGame();
+        }
+
+        /** Updates the inventory list display. */
+        function updateInventoryDisplay() {
+            let html = '';
+            let hasLogs = false;
+            for (const key in TREES) {
+                const logCount = game.inventory[key];
+                if (logCount > 0) {
+                    hasLogs = true;
+                    html += `
+                        <div class="log-item">
+                            <span>${TREES[key].name} Logs:</span>
+                            <span>${logCount.toLocaleString()}</span>
+                        </div>
+                    `;
+                }
+            }
+            D.inventoryList.innerHTML = hasLogs ? html : '<p>Inventory is empty.</p>';
+        }
+
+        /** Toggles the visibility of the inventory window. */
+        function toggleInventory() {
+            game.isInventoryOpen = !game.isInventoryOpen;
+            D.inventoryWindow.classList.toggle('open', game.isInventoryOpen);
+            D.inventoryToggleButton.textContent = game.isInventoryOpen ? 'Close Inventory' : 'Open Inventory';
+            if (game.isInventoryOpen) {
+                updateInventoryDisplay();
+            }
         }
 
         /** Processes experience gain and checks for level up. */
@@ -372,7 +466,7 @@
             let leveledUp = false;
 
             while (game.level < 99 && game.currentXP >= calculateXPForLevel(game.level)) {
-                game.currentXP -= calculateXPForLevel(game.level); // Subtract XP cost
+                // To maintain classic XP logic, don't subtract XP on level up, just proceed to the next level's requirement.
                 game.level++;
                 leveledUp = true;
             }
@@ -385,8 +479,7 @@
                     notify(`Axe unlocked! You are now using the ${game.currentAxe.name}! ⛏️`);
                 }
                 notify(`Congratulations! You reached Woodcutting Level ${game.level}! 🎉`);
-                // Re-evaluate tree selection based on new level
-                selectTree(game.currentTree);
+                selectTree(game.currentTree); // Re-evaluate tree selection based on new level
             }
 
             updateDisplay();
@@ -408,7 +501,6 @@
         /** Calculates the actual time to cut based on tree and axe. */
         function getCalculatedCutTime() {
             const treeData = TREES[game.currentTree];
-            // Time = Base Time * (1 - speedBoost)
             return treeData.baseTime * (1 - game.currentAxe.speedBoost);
         }
 
@@ -419,12 +511,10 @@
             game.isCutting = true;
             game.totalCutTime = getCalculatedCutTime();
             let timeElapsed = 0;
-            const interval = 50; // Update every 50ms
+            const interval = 50; 
 
-            D.cutButton.disabled = true;
             D.timerText.textContent = `Chopping ${TREES[game.currentTree].name}...`;
             
-            // Clear any old timer just in case
             if (game.cutTimer) clearInterval(game.cutTimer);
 
             game.cutTimer = setInterval(() => {
@@ -446,18 +536,23 @@
         function finishCutting() {
             game.isCutting = false;
             const treeData = TREES[game.currentTree];
+            const treeKey = game.currentTree;
 
-            game.logs++;
+            // Log is added to the specific inventory slot
+            game.inventory[treeKey]++; 
             gainXP(treeData.xp);
 
             D.timerBar.style.width = '0%';
             D.timerText.textContent = `Got a ${treeData.name} log! Ready to chop!`;
-            D.cutButton.disabled = false;
             notify(`+1 ${treeData.name} Log, +${treeData.xp} XP`);
+            
+            // Update the inventory display if it's open
+            if (game.isInventoryOpen) {
+                updateInventoryDisplay();
+            }
 
-            // Check if player meets the requirements for the current tree before auto-restarting
+            // Auto-restart logic
             if (game.autoChop && game.level >= treeData.requiredLevel) {
-                // 500ms delay before next chop to make it feel like an action loop
                 setTimeout(startCutting, 500); 
             }
             updateDisplay();
@@ -472,7 +567,7 @@
                 return;
             }
 
-            // --- FIX: STOP CHOPPING WHEN SWITCHING TREES ---
+            // Stop any current chopping action
             if (game.isCutting) {
                 clearInterval(game.cutTimer);
                 game.cutTimer = null;
@@ -482,7 +577,6 @@
             }
 
             game.currentTree = treeKey;
-            D.cutButton.disabled = false; // Re-enable button after potential stop
             updateDisplay();
         }
 
@@ -495,8 +589,6 @@
                 button.className = 'tree-button';
                 button.dataset.tree = key;
                 button.textContent = `${tree.name} (Lvl ${tree.requiredLevel})`;
-                
-                // Add click listener to call the selectTree function
                 button.addEventListener('click', () => selectTree(key));
                 D.treeSelectButtons.appendChild(button);
             }
@@ -509,7 +601,6 @@
             msgElement.textContent = message;
             D.notifications.appendChild(msgElement);
 
-            // Remove the message after the animation finishes (3.1s)
             setTimeout(() => {
                 if (msgElement.parentNode) {
                     msgElement.remove();
@@ -519,13 +610,13 @@
 
         // --- Initialization ---
 
-        // Load game on start
         window.onload = () => {
             loadGame();
         };
 
         // Event Listeners
         D.cutButton.addEventListener('click', startCutting);
+        D.inventoryToggleButton.addEventListener('click', toggleInventory);
 
         // Set up an automatic save every 10 seconds
         setInterval(saveGame, 10000);
