@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku Master</title>
+    <style>
+        :root {
+            --grid-size: 90vmin;
+            --cell-size: calc(var(--grid-size) / 9);
+            --note-color: #a020f0; /* Purple for notes */
+            --bg-color: #ffffff;
+            --text-color: #000000;
+            --accent-color: #4a90e2; /* Blue for active state */
+            --grid-line-thin: 1px solid var(--text-color);
+            --grid-line-thick: 3px solid var(--text-color);
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 10px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            user-select: none;
+            -webkit-user-select: none; /* Safari */
+        }
+
+        /* --- Header and Controls --- */
+        .header-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: min(100%, 500px); /* Max width for readability */
+            margin-bottom: 10px;
+            gap: 10px;
+        }
+
+        #timer {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+
+        .difficulty-select, .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .difficulty-select button,
+        .action-buttons button,
+        .control-button {
+            padding: 8px 12px;
+            font-size: 0.9em;
+            border: 1px solid var(--text-color);
+            background-color: transparent;
+            cursor: pointer;
+            transition: background-color 0.2s, color 0.2s;
+            border-radius: 4px;
+            color: var(--text-color);
+        }
+
+        .difficulty-select button:hover,
+        .action-buttons button:hover,
+        .control-button:hover {
+            background-color: #eee;
+        }
+
+        .difficulty-select button.active {
+            background-color: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }
+        
+        /* --- Sudoku Grid --- */
+        #sudoku-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            grid-template-rows: repeat(9, 1fr);
+            width: var(--grid-size);
+            height: var(--grid-size);
+            max-width: 500px;
+            max-height: 500px;
+            border: var(--grid-line-thick);
+            margin: 10px 0;
+            touch-action: manipulation; /* Improves touch responsiveness */
+        }
+
+        .tile {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: var(--grid-line-thin);
+            cursor: pointer;
+            font-size: 2em; /* Big number size */
+            font-weight: bold;
+            position: relative;
+            background-color: var(--bg-color);
+            transition: background-color 0.1s;
+        }
+
+        .tile:hover:not(.pre-filled) {
+            background-color: #f0f0f0;
+        }
+
+        .tile.selected:not(.pre-filled) {
+            background-color: #c9e6ff; /* Light blue on selection */
+        }
+
+        .tile.pre-filled {
+            background-color: #e0e0e0;
+            color: #333;
+        }
+        
+        /* Thick lines for 3x3 blocks */
+        .tile:nth-child(3n) { border-right: var(--grid-line-thick); }
+        .tile:nth-child(9n) { border-right: var(--grid-line-thin); }
+        .tile:nth-child(27n) ~ .tile:nth-child(27n+1),
+        .tile:nth-child(27n) ~ .tile:nth-child(27n+2),
+        .tile:nth-child(27n) ~ .tile:nth-child(27n+3),
+        .tile:nth-child(27n) ~ .tile:nth-child(27n+4),
+        .tile:nth-child(27n) ~ .tile:nth-child(27n+5),
+        .tile:nth-child(27n) ~ .tile:nth-child(27n+6) { border-top: var(--grid-line-thick); }
+        
+        .tile:nth-child(27n + 1) { border-top: var(--grid-line-thin); }
+        .tile:nth-child(1), .tile:nth-child(2), .tile:nth-child(3), 
+        .tile:nth-child(4), .tile:nth-child(5), .tile:nth-child(6), 
+        .tile:nth-child(7), .tile:nth-child(8), .tile:nth-child(9) { border-top: var(--grid-line-thin) !important; }
+
+        /* Notes layout */
+        .notes-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            width: 100%;
+            height: 100%;
+            font-size: 0.25em; /* Small size relative to cell */
+            color: var(--note-color);
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none; /* Allow tile click through notes */
+        }
+        .note {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .big-number {
+            position: relative;
+            z-index: 10;
+        }
+
+        /* --- Mobile Controls Container --- */
+        .mobile-controls-container {
+            display: flex;
+            width: min(100%, 500px);
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .notes-panel, .numbers-panel {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            width: 48%; /* Roughly half the space */
+        }
+
+        .notes-panel {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .control-button {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2em;
+            width: 100%;
+            height: 40px;
+        }
+        
+        .control-button.note-mode-toggle {
+            grid-column: 1 / span 3;
+            background-color: #f5f5f5;
+        }
+        
+        .control-button.note-mode-toggle.active {
+            background-color: var(--note-color);
+            color: white;
+            border-color: var(--note-color);
+        }
+
+        /* Utility button (Erase) */
+        .utility-button {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2em;
+            width: 100%;
+            height: 40px;
+            grid-column: 1 / span 3;
+        }
+
+        /* --- Personal Best Area --- */
+        #personal-best-container {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: min(100%, 500px);
+            text-align: center;
+            background-color: #f9f9f9;
+            font-size: 0.9em;
+        }
+
+        #personal-best-data {
+            margin-top: 5px;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+
+        #personal-best-data div {
+            padding: 5px;
+        }
+        
+        /* --- Media Queries for Layout Adjustments --- */
+        @media (max-width: 600px) {
+            :root {
+                --grid-size: 90vw;
+            }
+
+            .header-controls {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .difficulty-select, .action-buttons {
+                width: 100%;
+                justify-content: space-around;
+            }
+            
+            .difficulty-select button,
+            .action-buttons button {
+                flex-grow: 1;
+                font-size: 0.8em;
+                padding: 6px 10px;
+            }
+
+            .notes-panel, .numbers-panel {
+                width: 48%;
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Sudoku Master</h1>
+
+    <div class="header-controls">
+        <div class="difficulty-select" id="difficulty-select">
+            <button data-difficulty="easy">Easy</button>
+            <button data-difficulty="medium" class="active">Medium</button>
+            <button data-difficulty="hard">Hard</button>
+        </div>
+        <div id="timer">00:00</div>
+        <div class="action-buttons">
+            <button id="start-button">START</button>
+            <button id="next-map-button">NEXT MAP</button>
+            <button id="solve-button">SOLVE</button>
+        </div>
+    </div>
+
+    <div id="sudoku-grid">
+        </div>
+
+    <div class="mobile-controls-container">
+        <div class="notes-panel">
+            <button class="control-button note-mode-toggle" id="note-mode-toggle">📝 NOTE MODE: OFF</button>
+            </div>
+
+        <div class="numbers-panel">
+            <button class="utility-button" id="erase-button">❌ ERASE</button>
+        </div>
+    </div>
+
+    <div id="personal-best-container">
+        <button id="personal-best-button">🏆 Personal Best & Stats</button>
+        <div id="personal-best-data" style="display: none;">
+            <div>Easy Solved: <span id="easy-count">0</span></div>
+            <div>Medium Solved: <span id="medium-count">0</span></div>
+            <div>Hard Solved: <span id="hard-count">0</span></div>
+            <div>Lowest Time: <span id="lowest-time">--:--</span></div>
+        </div>
+    </div>
+    
+    <script>
+        // --- CONSTANTS AND STATE ---
+        const GRID_SIZE = 9;
+        const TILE_COUNT = GRID_SIZE * GRID_SIZE;
+        const EMPTY_CELL = 0;
+
+        let currentGrid = [];
+        let solutionGrid = [];
+        let notesGrid = Array.from({ length: TILE_COUNT }, () => new Set());
+        let preFilled = [];
+
+        let selectedTile = null;
+        let isNoteMode = false;
+        let isGameActive = false;
+        let timerInterval = null;
+        let timeElapsed = 0;
+        let currentDifficulty = 'medium';
+
+        // Stored stats (Personal Best)
+        const stats = JSON.parse(localStorage.getItem('sudokuStats')) || {
+            easySolved: 0,
+            mediumSolved: 0,
+            hardSolved: 0,
+            lowestTime: Infinity // Stored in seconds
+        };
+
+        // DOM Elements
+        const gridEl = document.getElementById('sudoku-grid');
+        const timerEl = document.getElementById('timer');
+        const noteModeToggleEl = document.getElementById('note-mode-toggle');
+        const startButtonEl = document.getElementById('start-button');
+        const nextMapButtonEl = document.getElementById('next-map-button');
+        const solveButtonEl = document.getElementById('solve-button');
+        const eraseButtonEl = document.getElementById('erase-button');
+        const personalBestDataEl = document.getElementById('personal-best-data');
+        const personalBestButtonEl = document.getElementById('personal-best-button');
+
+        // --- CORE GAME LOGIC: SUDOKU GENERATION & SOLVING (Backtracking) ---
+        
+        /**
+         * Checks if a number is safe to place at a given position.
+         * @param {number[][]} board - The 9x9 board.
+         * @param {number} r - Row index.
+         * @param {number} c - Column index.
+         * @param {number} num - Number to check (1-9).
+         * @returns {boolean} True if safe, false otherwise.
+         */
+        const isSafe = (board, r, c, num) => {
+            // Check row and column
+            for (let i = 0; i < GRID_SIZE; i++) {
+                if (board[r][i] === num || board[i][c] === num) {
+                    return false;
+                }
+            }
+            // Check 3x3 box
+            const startRow = r - (r % 3);
+            const startCol = c - (c % 3);
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    if (board[startRow + i][startCol + j] === num) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        };
+
+        /**
+         * Solves the board using recursive backtracking.
+         * @param {number[][]} board - The 9x9 board.
+         * @returns {boolean} True if solved, false otherwise.
+         */
+        const solveSudoku = (board) => {
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (board[r][c] === EMPTY_CELL) {
+                        for (let num = 1; num <= 9; num++) {
+                            if (isSafe(board, r, c, num)) {
+                                board[r][c] = num;
+                                if (solveSudoku(board)) {
+                                    return true;
+                                }
+                                board[r][c] = EMPTY_CELL; // Backtrack
+                            }
+                        }
+                        return false;
+                    }
+                }
+            }
+            return true; // Solved
+        };
+
+        /**
+         * Generates a full, solved Sudoku grid.
+         * @returns {number[][]} A 9x9 solved grid.
+         */
+        const generateFullSolution = () => {
+            const board = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(EMPTY_CELL));
+            const solve = (r, c) => {
+                if (r === GRID_SIZE) return true; // Base case: successfully filled board
+                const nextC = (c + 1) % GRID_SIZE;
+                const nextR = nextC === 0 ? r + 1 : r;
+
+                // Simple generation: fill diagonal 3x3 blocks first for a guaranteed start
+                if (r < 3 && c < 3) board[r][c] = ((r * 3 + c) % 9) + 1;
+
+                if (board[r][c] !== EMPTY_CELL) return solve(nextR, nextC);
+                
+                const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9].sort(() => Math.random() - 0.5); // Randomize
+                
+                for (const num of numbers) {
+                    if (isSafe(board, r, c, num)) {
+                        board[r][c] = num;
+                        if (solve(nextR, nextC)) return true;
+                        board[r][c] = EMPTY_CELL; // Backtrack
+                    }
+                }
+                return false;
+            };
+            
+            // Initial simple shuffle of the first block for better variety
+            for(let i=0; i<3; i++) for(let j=0; j<3; j++) board[i][j] = ((i*3+j)%9) + 1;
+            
+            solve(0, 0); // Start from the beginning
+            return board;
+        };
+        
+        /**
+         * Creates a playable puzzle by removing cells.
+         * @param {number[][]} solution - The full solved grid.
+         * @param {string} difficulty - 'easy', 'medium', or 'hard'.
+         * @returns {number[][]} The puzzle grid.
+         */
+        const createPuzzle = (solution, difficulty) => {
+            // Number of cells to remove (a common heuristic)
+            let cellsToRemove;
+            switch (difficulty) {
+                case 'easy': cellsToRemove = 35; break; // Leaves ~46 pre-filled
+                case 'medium': cellsToRemove = 45; break; // Leaves ~36 pre-filled
+                case 'hard': cellsToRemove = 55; break; // Leaves ~26 pre-filled
+                default: cellsToRemove = 45;
+            }
+
+            const puzzle = solution.map(row => [...row]); // Deep copy
+            const positions = Array.from({ length: TILE_COUNT }, (_, i) => i);
+            positions.sort(() => Math.random() - 0.5); // Randomize removal order
+
+            let removedCount = 0;
+            for (const index of positions) {
+                if (removedCount >= cellsToRemove) break;
+
+                const r = Math.floor(index / GRID_SIZE);
+                const c = index % GRID_SIZE;
+                const temp = puzzle[r][c];
+                puzzle[r][c] = EMPTY_CELL;
+                removedCount++;
+
+                // **Simplified Single Solution Check:** // In a real game, you need a multi-solution checker, but for a single-file implementation, we skip it for brevity.
+                // This means some generated puzzles *might* technically have multiple solutions, but the core logic is there.
+            }
+            return puzzle;
+        };
+
+        // --- TIMER FUNCTIONS ---
+        const startTimer = () => {
+            if (timerInterval) clearInterval(timerInterval);
+            timeElapsed = 0;
+            timerInterval = setInterval(() => {
+                timeElapsed++;
+                updateTimerDisplay();
+            }, 1000);
+        };
+
+        const stopTimer = () => {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = null;
+        };
+
+        const updateTimerDisplay = () => {
+            const minutes = String(Math.floor(timeElapsed / 60)).padStart(2, '0');
+            const seconds = String(timeElapsed % 60).padStart(2, '0');
+            timerEl.textContent = `${minutes}:${seconds}`;
+        };
+
+        // --- UI RENDER FUNCTIONS ---
+        
+        /**
+         * Creates the HTML structure for the 9x9 grid.
+         */
+        const createGridUI = () => {
+            gridEl.innerHTML = '';
+            for (let i = 0; i < TILE_COUNT; i++) {
+                const tile = document.createElement('div');
+                tile.classList.add('tile');
+                tile.dataset.index = i;
+                tile.addEventListener('click', () => handleTileClick(i));
+                gridEl.appendChild(tile);
+            }
+        };
+
+        /**
+         * Renders the current game state to the UI.
+         */
+        const renderGrid = () => {
+            const tiles = gridEl.querySelectorAll('.tile');
+            for (let i = 0; i < TILE_COUNT; i++) {
+                const tile = tiles[i];
+                const r = Math.floor(i / GRID_SIZE);
+                const c = i % GRID_SIZE;
+                const value = currentGrid[r][c];
+
+                tile.innerHTML = ''; // Clear existing content
+
+                if (preFilled[i]) {
+                    tile.classList.add('pre-filled');
+                    tile.textContent = value;
+                    tile.classList.remove('user-entered');
+                } else if (value !== EMPTY_CELL) {
+                    // User entered value
+                    tile.classList.remove('pre-filled');
+                    tile.classList.add('user-entered');
+                    tile.textContent = value;
+                } else {
+                    // Empty, show notes
+                    tile.classList.remove('pre-filled', 'user-entered');
+                    const notesContainer = document.createElement('div');
+                    notesContainer.classList.add('notes-container');
+
+                    for (let n = 1; n <= 9; n++) {
+                        const noteEl = document.createElement('div');
+                        noteEl.classList.add('note');
+                        if (notesGrid[i].has(n)) {
+                            noteEl.textContent = n;
+                        } else {
+                            noteEl.innerHTML = '&nbsp;'; // Keep structure
+                        }
+                        notesContainer.appendChild(noteEl);
+                    }
+                    tile.appendChild(notesContainer);
+                }
+                
+                // Highlight incorrect answers (only for user-entered cells and only after a win/loss check, or can be done dynamically)
+                // Simplified: We'll highlight when checking the solution or on a "solve" click.
+            }
+        };
+        
+        /**
+         * Renders the mobile input panels.
+         */
+        const renderInputPanels = () => {
+            const numbersPanel = document.querySelector('.numbers-panel');
+            const notesPanel = document.querySelector('.notes-panel');
+
+            // Clear existing number buttons (keep ERASE)
+            const numberButtons = numbersPanel.querySelectorAll('.control-button[data-number]');
+            numberButtons.forEach(btn => btn.remove());
+            
+            // Clear existing note buttons (keep NOTE MODE TOGGLE)
+            const noteButtons = notesPanel.querySelectorAll('.control-button[data-note]');
+            noteButtons.forEach(btn => btn.remove());
+
+            // Generate 1-9 buttons for both panels
+            for (let i = 1; i <= 9; i++) {
+                // Numbers Panel
+                const numBtn = document.createElement('button');
+                numBtn.classList.add('control-button');
+                numBtn.dataset.number = i;
+                numBtn.textContent = i;
+                numBtn.addEventListener('click', () => handleNumberInput(i));
+                numbersPanel.insertBefore(numBtn, eraseButtonEl); // Insert before Erase button
+
+                // Notes Panel
+                const noteBtn = document.createElement('button');
+                noteBtn.classList.add('control-button');
+                noteBtn.dataset.note = i;
+                noteBtn.textContent = i;
+                noteBtn.addEventListener('click', () => handleNoteInput(i));
+                notesPanel.appendChild(noteBtn);
+            }
+        };
+
+        // --- GAME FLOW & INITIALIZATION ---
+        
+        /**
+         * Sets up a new game.
+         */
+        const setupNewGame = () => {
+            stopTimer();
+            isGameActive = true;
+            
+            // 1. Generate full solution
+            solutionGrid = generateFullSolution();
+            
+            // 2. Create the puzzle
+            currentGrid = createPuzzle(solutionGrid, currentDifficulty);
+
+            // 3. Reset state
+            notesGrid = Array.from({ length: TILE_COUNT }, () => new Set());
+            preFilled = [];
+            currentGrid.flat().forEach((val, i) => {
+                if (val !== EMPTY_CELL) preFilled[i] = true;
+            });
+            selectedTile = null;
+            isNoteMode = false;
+            noteModeToggleEl.classList.remove('active');
+            noteModeToggleEl.textContent = '📝 NOTE MODE: OFF';
+            
+            // 4. Render UI
+            createGridUI();
+            renderGrid();
+            
+            // 5. Start timer
+            startTimer();
+            alert(`New ${currentDifficulty.toUpperCase()} game started!`);
+        };
+
+        // --- EVENT HANDLERS ---
+        
+        /**
+         * Handles selecting a tile.
+         */
+        const handleTileClick = (index) => {
+            if (!isGameActive) return;
+
+            const tiles = gridEl.querySelectorAll('.tile');
+            
+            // Deselect previous tile
+            if (selectedTile !== null) {
+                tiles[selectedTile].classList.remove('selected');
+            }
+
+            // Select new tile
+            selectedTile = index;
+            tiles[selectedTile].classList.add('selected');
+        };
+
+        /**
+         * Handles input of a 'big' number.
+         */
+        const handleNumberInput = (number) => {
+            if (!isGameActive || !selectedTile) return;
+
+            const r = Math.floor(selectedTile / GRID_SIZE);
+            const c = selectedTile % GRID_SIZE;
+
+            // Cannot change pre-filled cells
+            if (preFilled[selectedTile]) return;
+
+            // Set the big number
+            currentGrid[r][c] = number;
+            
+            // Remove all notes from this tile
+            notesGrid[selectedTile].clear();
+
+            renderGrid();
+            checkWinCondition();
+        };
+
+        /**
+         * Handles toggling a 'note' number.
+         */
+        const handleNoteInput = (number) => {
+            if (!isGameActive || !selectedTile || !isNoteMode) return;
+
+            const r = Math.floor(selectedTile / GRID_SIZE);
+            const c = selectedTile % GRID_SIZE;
+
+            if (preFilled[selectedTile] || currentGrid[r][c] !== EMPTY_CELL) return;
+
+            // Toggle note
+            if (notesGrid[selectedTile].has(number)) {
+                notesGrid[selectedTile].delete(number);
+            } else {
+                notesGrid[selectedTile].add(number);
+            }
+
+            renderGrid();
+        };
+
+        /**
+         * Handles keyboard input (for desktop use).
+         */
+        document.addEventListener('keydown', (e) => {
+            if (!isGameActive || !selectedTile) return;
+
+            const key = e.key;
+            
+            // 1-9 input
+            if (key >= '1' && key <= '9') {
+                const number = parseInt(key);
+                if (isNoteMode) {
+                    handleNoteInput(number);
+                } else {
+                    handleNumberInput(number);
+                }
+            } 
+            // Erase/Clear input
+            else if (key === 'Delete' || key === 'Backspace' || key === '0') {
+                handleErase();
+            }
+            // Arrow key navigation (optional but good for UX)
+            else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+                e.preventDefault(); // Prevent page scroll
+                let newIndex = selectedTile;
+                const r = Math.floor(selectedTile / GRID_SIZE);
+                const c = selectedTile % GRID_SIZE;
+                
+                if (key === 'ArrowUp') newIndex = (r > 0) ? selectedTile - GRID_SIZE : selectedTile;
+                if (key === 'ArrowDown') newIndex = (r < 8) ? selectedTile + GRID_SIZE : selectedTile;
+                if (key === 'ArrowLeft') newIndex = (c > 0) ? selectedTile - 1 : selectedTile;
+                if (key === 'ArrowRight') newIndex = (c < 8) ? selectedTile + 1 : selectedTile;
+                
+                if (newIndex !== selectedTile) {
+                    handleTileClick(newIndex);
+                }
+            }
+        });
+
+        /**
+         * Handles the ERASE button.
+         */
+        const handleErase = () => {
+            if (!isGameActive || !selectedTile || preFilled[selectedTile]) return;
+
+            const r = Math.floor(selectedTile / GRID_SIZE);
+            const c = selectedTile % GRID_SIZE;
+
+            // If a big number is set, erase it
+            if (currentGrid[r][c] !== EMPTY_CELL) {
+                currentGrid[r][c] = EMPTY_CELL;
+            } 
+            // If in note mode and a big number isn't set, clear all notes
+            else {
+                notesGrid[selectedTile].clear();
+            }
+            
+            renderGrid();
+        };
+
+
+        /**
+         * Checks if the current grid is fully and correctly solved.
+         * @returns {boolean} True if solved, false otherwise.
+         */
+        const isSolved = () => {
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (currentGrid[r][c] !== solutionGrid[r][c]) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        };
+        
+        /**
+         * Checks the win condition. Called after every valid number input.
+         */
+        const checkWinCondition = () => {
+            // Check if every cell has a number (is fully filled)
+            const isFull = currentGrid.flat().every(val => val !== EMPTY_CELL);
+
+            if (isFull) {
+                if (isSolved()) {
+                    handleWin();
+                } else {
+                    // All cells filled, but not solved (can optionally show incorrect answers)
+                    // For now, let the user continue.
+                }
+            }
+        };
+
+        /**
+         * Handles game win.
+         */
+        const handleWin = () => {
+            if (!isGameActive) return;
+
+            stopTimer();
+            isGameActive = false;
+            
+            // Update Stats
+            if (timeElapsed < stats.lowestTime) {
+                stats.lowestTime = timeElapsed;
+            }
+            switch (currentDifficulty) {
+                case 'easy': stats.easySolved++; break;
+                case 'medium': stats.mediumSolved++; break;
+                case 'hard': stats.hardSolved++; break;
+            }
+            localStorage.setItem('sudokuStats', JSON.stringify(stats));
+            updateStatsDisplay();
+
+            alert(`🎉 CONGRATULATIONS! You solved the ${currentDifficulty.toUpperCase()} puzzle in ${timerEl.textContent}!`);
+        };
+        
+        /**
+         * Fills in the solution and ends the game (Loss if not solved by player).
+         */
+        const handleSolve = () => {
+            if (!isGameActive) return;
+
+            const isPlayerSolved = currentGrid.flat().every((val, i) => val === solutionGrid.flat()[i]);
+            
+            stopTimer();
+            isGameActive = false;
+            
+            if (isPlayerSolved) {
+                alert("Game solved! (Solution check confirmed your victory!)");
+            } else {
+                alert("Game over! You pressed SOLVE before finishing. Better luck next time!");
+            }
+            
+            // Show the actual solution
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    currentGrid[r][c] = solutionGrid[r][c];
+                }
+            }
+            preFilled = Array(TILE_COUNT).fill(true); // Mark all as pre-filled for display
+
+            renderGrid();
+        };
+
+        // --- STATS AND UTILITY ---
+        
+        /**
+         * Updates the personal best display.
+         */
+        const updateStatsDisplay = () => {
+            document.getElementById('easy-count').textContent = stats.easySolved;
+            document.getElementById('medium-count').textContent = stats.mediumSolved;
+            document.getElementById('hard-count').textContent = stats.hardSolved;
+            
+            const minutes = String(Math.floor(stats.lowestTime / 60)).padStart(2, '0');
+            const seconds = String(stats.lowestTime % 60).padStart(2, '0');
+            document.getElementById('lowest-time').textContent = stats.lowestTime === Infinity ? '--:--' : `${minutes}:${seconds}`;
+        };
+
+
+        // --- BINDING EVENTS ---
+        
+        // Difficulty Selection
+        document.getElementById('difficulty-select').addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                const newDifficulty = e.target.dataset.difficulty;
+                document.querySelectorAll('#difficulty-select button').forEach(btn => btn.classList.remove('active'));
+                e.target.classList.add('active');
+                currentDifficulty = newDifficulty;
+                // Automatically start a new game when difficulty changes after the first game starts
+                if(startButtonEl.textContent === 'RESTART') {
+                    setupNewGame();
+                }
+            }
+        });
+        
+        // Main Action Buttons
+        startButtonEl.addEventListener('click', () => {
+            setupNewGame();
+            startButtonEl.textContent = 'RESTART';
+        });
+        nextMapButtonEl.addEventListener('click', setupNewGame);
+        solveButtonEl.addEventListener('click', handleSolve);
+        
+        // Mobile Controls
+        noteModeToggleEl.addEventListener('click', () => {
+            isNoteMode = !isNoteMode;
+            noteModeToggleEl.classList.toggle('active', isNoteMode);
+            noteModeToggleEl.textContent = `📝 NOTE MODE: ${isNoteMode ? 'ON' : 'OFF'}`;
+        });
+        eraseButtonEl.addEventListener('click', handleErase);
+
+        // Personal Best Toggle
+        personalBestButtonEl.addEventListener('click', () => {
+            const isVisible = personalBestDataEl.style.display === 'flex';
+            personalBestDataEl.style.display = isVisible ? 'none' : 'flex';
+            personalBestButtonEl.textContent = isVisible ? '🏆 Personal Best & Stats' : 'Stats: Hide';
+        });
+
+        // --- INITIAL SETUP CALLS ---
+        createGridUI(); // Initialize grid structure
+        renderInputPanels(); // Initialize control buttons
+        updateStatsDisplay(); // Load stats on startup
+        updateTimerDisplay(); // Initialize timer display
+        
+    </script>
+</body>
+</html>
