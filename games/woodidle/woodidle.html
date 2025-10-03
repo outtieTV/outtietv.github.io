@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumberjack Legends - Retro Woodcutter</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <h1 id="game-title">Lumberjack Legends</h1>
+
+        <div id="top-bar">
+            <span id="xp-display">XP to Lvl 2: 83</span>
+            <span id="level-display">Level: 1 🌳</span>
+        </div>
+
+        <div id="main-area">
+            <div id="tree-section">
+                <div id="tree-image-placeholder">[Tree Image Here]</div>
+                <div id="tree-info">
+                    <p>Current Tree: <span id="current-tree-name">Regular</span></p>
+                    <p>Required Level: <span id="required-level">1</span></p>
+                </div>
+                <div id="tree-select-buttons">
+                    </div>
+            </div>
+
+            <div id="action-section">
+                <button id="cut-tree-button">Chop Tree!</button>
+                <div id="timer-bar-container">
+                    <div id="timer-bar"></div>
+                </div>
+                <p id="timer-text">Ready to chop!</p>
+            </div>
+        </div>
+
+        <div id="bottom-bar">
+            <p id="axe-display">Axe: Stone Axe (0% speed boost)</p>
+            <p id="logs-display">Logs: 0</p>
+        </div>
+
+        <div id="notifications"></div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
