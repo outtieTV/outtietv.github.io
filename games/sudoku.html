@@ -222,13 +222,16 @@
 
         #personal-best-data {
             margin-top: 5px;
-            display: flex;
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Two columns for pairs */
+            gap: 5px;
             justify-content: space-around;
             flex-wrap: wrap;
         }
 
         #personal-best-data div {
             padding: 5px;
+            text-align: left;
         }
         
         /* --- Media Queries for Layout Adjustments --- */
@@ -298,7 +301,9 @@
             <div>Easy Solved: <span id="easy-count">0</span></div>
             <div>Medium Solved: <span id="medium-count">0</span></div>
             <div>Hard Solved: <span id="hard-count">0</span></div>
-            <div>Lowest Time: <span id="lowest-time">--:--</span></div>
+            <div>Best Easy Time: <span id="best-easy-time">--:--</span></div>
+            <div>Best Medium Time: <span id="best-medium-time">--:--</span></div>
+            <div>Best Hard Time: <span id="best-hard-time">--:--</span></div>
         </div>
     </div>
     
@@ -318,16 +323,26 @@
         let isGameActive = false;
         let timerInterval = null;
         let timeElapsed = 0;
-        // CHANGE 1: Set default difficulty to 'easy'
-        let currentDifficulty = 'easy';
+        let currentDifficulty = 'easy'; // Default to Easy
 
-        // Stored stats (Personal Best)
-        const stats = JSON.parse(localStorage.getItem('sudokuStats')) || {
+        // Default stats structure with separate lowest times
+        const defaultStats = {
             easySolved: 0,
             mediumSolved: 0,
             hardSolved: 0,
-            lowestTime: Infinity // Stored in seconds
+            bestEasyTime: Infinity,
+            bestMediumTime: Infinity,
+            bestHardTime: Infinity
         };
+        
+        // Load stats from localStorage, using the new structure or migrating old one
+        let stats = JSON.parse(localStorage.getItem('sudokuStats')) || defaultStats;
+        
+        // Ensure new time properties exist on startup (for old saves)
+        stats.bestEasyTime = stats.bestEasyTime ?? defaultStats.bestEasyTime;
+        stats.bestMediumTime = stats.bestMediumTime ?? defaultStats.bestMediumTime;
+        stats.bestHardTime = stats.bestHardTime ?? defaultStats.bestHardTime;
+
 
         // DOM Elements
         const gridEl = document.getElementById('sudoku-grid');
@@ -344,20 +359,13 @@
         
         /**
          * Checks if a number is safe to place at a given position.
-         * @param {number[][]} board - The 9x9 board.
-         * @param {number} r - Row index.
-         * @param {number} c - Column index.
-         * @param {number} num - Number to check (1-9).
-         * @returns {boolean} True if safe, false otherwise.
          */
         const isSafe = (board, r, c, num) => {
-            // Check row and column
             for (let i = 0; i < GRID_SIZE; i++) {
                 if (board[r][i] === num || board[i][c] === num) {
                     return false;
                 }
             }
-            // Check 3x3 box
             const startRow = r - (r % 3);
             const startCol = c - (c % 3);
             for (let i = 0; i < 3; i++) {
@@ -372,8 +380,6 @@
 
         /**
          * Solves the board using recursive backtracking.
-         * @param {number[][]} board - The 9x9 board.
-         * @returns {boolean} True if solved, false otherwise.
          */
         const solveSudoku = (board) => {
             for (let r = 0; r < GRID_SIZE; r++) {
@@ -397,47 +403,40 @@
 
         /**
          * Generates a full, solved Sudoku grid.
-         * @returns {number[][]} A 9x9 solved grid.
          */
         const generateFullSolution = () => {
             const board = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(EMPTY_CELL));
             const solve = (r, c) => {
-                if (r === GRID_SIZE) return true; // Base case: successfully filled board
+                if (r === GRID_SIZE) return true;
                 const nextC = (c + 1) % GRID_SIZE;
                 const nextR = nextC === 0 ? r + 1 : r;
 
-                // Simple generation: fill diagonal 3x3 blocks first for a guaranteed start
                 if (r < 3 && c < 3) board[r][c] = ((r * 3 + c) % 9) + 1;
 
                 if (board[r][c] !== EMPTY_CELL) return solve(nextR, nextC);
                 
-                const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9].sort(() => Math.random() - 0.5); // Randomize
+                const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9].sort(() => Math.random() - 0.5);
                 
                 for (const num of numbers) {
                     if (isSafe(board, r, c, num)) {
                         board[r][c] = num;
                         if (solve(nextR, nextC)) return true;
-                        board[r][c] = EMPTY_CELL; // Backtrack
+                        board[r][c] = EMPTY_CELL;
                     }
                 }
                 return false;
             };
             
-            // Initial simple shuffle of the first block for better variety
             for(let i=0; i<3; i++) for(let j=0; j<3; j++) board[i][j] = ((i*3+j)%9) + 1;
             
-            solve(0, 0); // Start from the beginning
+            solve(0, 0);
             return board;
         };
         
         /**
          * Creates a playable puzzle by removing cells, ensuring one number per 3x3 block.
-         * @param {number[][]} solution - The full solved grid.
-         * @param {string} difficulty - 'easy', 'medium', or 'hard'.
-         * @returns {number[][]} The puzzle grid.
          */
         const createPuzzle = (solution, difficulty) => {
-            // CHANGE 2: Adjust target removals (fewer pre-entered numbers overall)
             let cellsToKeep;
             switch (difficulty) {
                 case 'easy': cellsToKeep = 38; break; // Leaves ~38 pre-filled
@@ -446,10 +445,10 @@
                 default: cellsToKeep = 30;
             }
 
-            const puzzle = solution.map(row => [...row]); // Deep copy
+            const puzzle = solution.map(row => [...row]);
             let keptPositions = new Set();
 
-            // CHANGE 3: Enforce AT LEAST ONE number in each 3x3 block
+            // Enforce AT LEAST ONE number in each 3x3 block
             for (let blockR = 0; blockR < 3; blockR++) {
                 for (let blockC = 0; blockC < 3; blockC++) {
                     const blockPositions = [];
@@ -461,7 +460,6 @@
                         }
                     }
                     
-                    // Randomly select one position in the block to keep
                     const randomIndex = blockPositions[Math.floor(Math.random() * 9)];
                     keptPositions.add(randomIndex);
                 }
@@ -473,20 +471,14 @@
             let currentKeptCount = keptPositions.size;
             
             for (const index of allPositions) {
-                const r = Math.floor(index / GRID_SIZE);
-                const c = index % GRID_SIZE;
+                if (keptPositions.has(index)) continue;
 
-                if (keptPositions.has(index)) {
-                    // Already marked to be kept for the 3x3 rule
-                    continue;
-                }
-                
                 if (currentKeptCount < cellsToKeep) {
-                    // Keep the number if we're below the target count
                     keptPositions.add(index);
                     currentKeptCount++;
                 } else {
-                    // Remove the number
+                    const r = Math.floor(index / GRID_SIZE);
+                    const c = index % GRID_SIZE;
                     puzzle[r][c] = EMPTY_CELL;
                 }
             }
@@ -499,8 +491,6 @@
                     puzzle[r][c] = EMPTY_CELL;
                 }
             }
-
-            // The resulting puzzle will have exactly or slightly more than `cellsToKeep` (due to the 9 mandatory seeds)
             return puzzle;
         };
 
@@ -508,7 +498,7 @@
         const startTimer = () => {
             if (timerInterval) clearInterval(timerInterval);
             timeElapsed = 0;
-            updateTimerDisplay(); // Reset display immediately
+            updateTimerDisplay();
             timerInterval = setInterval(() => {
                 timeElapsed++;
                 updateTimerDisplay();
@@ -553,19 +543,17 @@
                 const c = i % GRID_SIZE;
                 const value = currentGrid[r][c];
 
-                tile.innerHTML = ''; // Clear existing content
+                tile.innerHTML = '';
 
                 if (preFilled[i]) {
                     tile.classList.add('pre-filled');
                     tile.textContent = value;
                     tile.classList.remove('user-entered');
                 } else if (value !== EMPTY_CELL) {
-                    // User entered value
                     tile.classList.remove('pre-filled');
                     tile.classList.add('user-entered');
                     tile.textContent = value;
                 } else {
-                    // Empty, show notes
                     tile.classList.remove('pre-filled', 'user-entered');
                     const notesContainer = document.createElement('div');
                     notesContainer.classList.add('notes-container');
@@ -576,7 +564,7 @@
                         if (notesGrid[i].has(n)) {
                             noteEl.textContent = n;
                         } else {
-                            noteEl.innerHTML = '&nbsp;'; // Keep structure
+                            noteEl.innerHTML = '&nbsp;';
                         }
                         notesContainer.appendChild(noteEl);
                     }
@@ -586,7 +574,7 @@
         };
         
         /**
-         * Renders the mobile input panels.
+         * Renders the mobile input panels. (Same as previous, omitted for brevity here)
          */
         const renderInputPanels = () => {
             const numbersPanel = document.querySelector('.numbers-panel');
@@ -608,7 +596,7 @@
                 numBtn.dataset.number = i;
                 numBtn.textContent = i;
                 numBtn.addEventListener('click', () => handleNumberInput(i));
-                numbersPanel.insertBefore(numBtn, eraseButtonEl); // Insert before Erase button
+                numbersPanel.insertBefore(numBtn, eraseButtonEl);
 
                 // Notes Panel
                 const noteBtn = document.createElement('button');
@@ -629,13 +617,9 @@
             stopTimer();
             isGameActive = true;
             
-            // 1. Generate full solution
             solutionGrid = generateFullSolution();
-            
-            // 2. Create the puzzle
             currentGrid = createPuzzle(solutionGrid, currentDifficulty);
 
-            // 3. Reset state
             notesGrid = Array.from({ length: TILE_COUNT }, () => new Set());
             preFilled = [];
             currentGrid.flat().forEach((val, i) => {
@@ -646,62 +630,44 @@
             noteModeToggleEl.classList.remove('active');
             noteModeToggleEl.textContent = '📝 NOTE MODE: OFF';
             
-            // 4. Render UI
             createGridUI();
             renderGrid();
             
-            // 5. Start timer
             startTimer();
-            // Show start button text change only after the first game has run
             startButtonEl.textContent = 'RESTART';
             alert(`New ${currentDifficulty.toUpperCase()} game started!`);
         };
 
         // --- EVENT HANDLERS ---
         
-        /**
-         * Handles selecting a tile.
-         */
         const handleTileClick = (index) => {
             if (!isGameActive) return;
 
             const tiles = gridEl.querySelectorAll('.tile');
             
-            // Deselect previous tile
             if (selectedTile !== null) {
                 tiles[selectedTile].classList.remove('selected');
             }
 
-            // Select new tile
             selectedTile = index;
             tiles[selectedTile].classList.add('selected');
         };
 
-        /**
-         * Handles input of a 'big' number.
-         */
         const handleNumberInput = (number) => {
             if (!isGameActive || !selectedTile) return;
 
             const r = Math.floor(selectedTile / GRID_SIZE);
             const c = selectedTile % GRID_SIZE;
 
-            // Cannot change pre-filled cells
             if (preFilled[selectedTile]) return;
 
-            // Set the big number
             currentGrid[r][c] = number;
-            
-            // Remove all notes from this tile
             notesGrid[selectedTile].clear();
 
             renderGrid();
             checkWinCondition();
         };
 
-        /**
-         * Handles toggling a 'note' number.
-         */
         const handleNoteInput = (number) => {
             if (!isGameActive || !selectedTile || !isNoteMode) return;
 
@@ -710,7 +676,6 @@
 
             if (preFilled[selectedTile] || currentGrid[r][c] !== EMPTY_CELL) return;
 
-            // Toggle note
             if (notesGrid[selectedTile].has(number)) {
                 notesGrid[selectedTile].delete(number);
             } else {
@@ -720,15 +685,11 @@
             renderGrid();
         };
 
-        /**
-         * Handles keyboard input (for desktop use).
-         */
         document.addEventListener('keydown', (e) => {
             if (!isGameActive || !selectedTile) return;
 
             const key = e.key;
             
-            // 1-9 input
             if (key >= '1' && key <= '9') {
                 const number = parseInt(key);
                 if (isNoteMode) {
@@ -737,13 +698,11 @@
                     handleNumberInput(number);
                 }
             } 
-            // Erase/Clear input
             else if (key === 'Delete' || key === 'Backspace' || key === '0') {
                 handleErase();
             }
-            // Arrow key navigation (optional but good for UX)
             else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
-                e.preventDefault(); // Prevent page scroll
+                e.preventDefault();
                 let newIndex = selectedTile;
                 const r = Math.floor(selectedTile / GRID_SIZE);
                 const c = selectedTile % GRID_SIZE;
@@ -759,20 +718,15 @@
             }
         });
 
-        /**
-         * Handles the ERASE button.
-         */
         const handleErase = () => {
             if (!isGameActive || !selectedTile || preFilled[selectedTile]) return;
 
             const r = Math.floor(selectedTile / GRID_SIZE);
             const c = selectedTile % GRID_SIZE;
 
-            // If a big number is set, erase it
             if (currentGrid[r][c] !== EMPTY_CELL) {
                 currentGrid[r][c] = EMPTY_CELL;
             } 
-            // If in note mode and a big number isn't set, clear all notes
             else {
                 notesGrid[selectedTile].clear();
             }
@@ -781,10 +735,6 @@
         };
 
 
-        /**
-         * Checks if the current grid is fully and correctly solved.
-         * @returns {boolean} True if solved, false otherwise.
-         */
         const isSolved = () => {
             for (let r = 0; r < GRID_SIZE; r++) {
                 for (let c = 0; c < GRID_SIZE; c++) {
@@ -796,22 +746,16 @@
             return true;
         };
         
-        /**
-         * Checks the win condition. Called after every valid number input.
-         */
         const checkWinCondition = () => {
-            // Check if every cell has a number (is fully filled)
             const isFull = currentGrid.flat().every(val => val !== EMPTY_CELL);
 
-            if (isFull) {
-                if (isSolved()) {
-                    handleWin();
-                } 
+            if (isFull && isSolved()) {
+                handleWin();
             }
         };
 
         /**
-         * Handles game win.
+         * Handles game win. Updates individual best times.
          */
         const handleWin = () => {
             if (!isGameActive) return;
@@ -820,23 +764,27 @@
             isGameActive = false;
             
             // Update Stats
-            if (timeElapsed < stats.lowestTime) {
-                stats.lowestTime = timeElapsed;
-            }
             switch (currentDifficulty) {
-                case 'easy': stats.easySolved++; break;
-                case 'medium': stats.mediumSolved++; break;
-                case 'hard': stats.hardSolved++; break;
+                case 'easy': 
+                    stats.easySolved++;
+                    if (timeElapsed < stats.bestEasyTime) stats.bestEasyTime = timeElapsed;
+                    break;
+                case 'medium': 
+                    stats.mediumSolved++;
+                    if (timeElapsed < stats.bestMediumTime) stats.bestMediumTime = timeElapsed;
+                    break;
+                case 'hard': 
+                    stats.hardSolved++;
+                    if (timeElapsed < stats.bestHardTime) stats.bestHardTime = timeElapsed;
+                    break;
             }
+
             localStorage.setItem('sudokuStats', JSON.stringify(stats));
             updateStatsDisplay();
 
             alert(`🎉 CONGRATULATIONS! You solved the ${currentDifficulty.toUpperCase()} puzzle in ${timerEl.textContent}!`);
         };
         
-        /**
-         * Fills in the solution and ends the game (Loss if not solved by player).
-         */
         const handleSolve = () => {
             if (!isGameActive) return;
 
@@ -851,19 +799,28 @@
                 alert("Game over! You pressed SOLVE before finishing. Better luck next time!");
             }
             
-            // Show the actual solution
             for (let r = 0; r < GRID_SIZE; r++) {
                 for (let c = 0; c < GRID_SIZE; c++) {
                     currentGrid[r][c] = solutionGrid[r][c];
                 }
             }
-            preFilled = Array(TILE_COUNT).fill(true); // Mark all as pre-filled for display
+            preFilled = Array(TILE_COUNT).fill(true);
 
             renderGrid();
         };
 
         // --- STATS AND UTILITY ---
         
+        /**
+         * Formats time (seconds) into MM:SS string.
+         */
+        const formatTime = (seconds) => {
+            if (seconds === Infinity) return '--:--';
+            const minutes = String(Math.floor(seconds / 60)).padStart(2, '0');
+            const secs = String(seconds % 60).padStart(2, '0');
+            return `${minutes}:${secs}`;
+        };
+
         /**
          * Updates the personal best display.
          */
@@ -872,9 +829,10 @@
             document.getElementById('medium-count').textContent = stats.mediumSolved;
             document.getElementById('hard-count').textContent = stats.hardSolved;
             
-            const minutes = String(Math.floor(stats.lowestTime / 60)).padStart(2, '0');
-            const seconds = String(stats.lowestTime % 60).padStart(2, '0');
-            document.getElementById('lowest-time').textContent = stats.lowestTime === Infinity ? '--:--' : `${minutes}:${seconds}`;
+            // Update individual best times
+            document.getElementById('best-easy-time').textContent = formatTime(stats.bestEasyTime);
+            document.getElementById('best-medium-time').textContent = formatTime(stats.bestMediumTime);
+            document.getElementById('best-hard-time').textContent = formatTime(stats.bestHardTime);
         };
 
 
@@ -888,7 +846,6 @@
                 e.target.classList.add('active');
                 currentDifficulty = newDifficulty;
                 
-                // Only automatically start/restart if a game has been started before
                 if(startButtonEl.textContent === 'RESTART') {
                     setupNewGame();
                 }
@@ -910,16 +867,16 @@
 
         // Personal Best Toggle
         personalBestButtonEl.addEventListener('click', () => {
-            const isVisible = personalBestDataEl.style.display === 'flex';
-            personalBestDataEl.style.display = isVisible ? 'none' : 'flex';
+            const isVisible = personalBestDataEl.style.display === 'grid';
+            personalBestDataEl.style.display = isVisible ? 'none' : 'grid';
             personalBestButtonEl.textContent = isVisible ? '🏆 Personal Best & Stats' : 'Stats: Hide';
         });
 
         // --- INITIAL SETUP CALLS ---
-        createGridUI(); // Initialize grid structure
-        renderInputPanels(); // Initialize control buttons
-        updateStatsDisplay(); // Load stats on startup
-        updateTimerDisplay(); // Initialize timer display
+        createGridUI();
+        renderInputPanels();
+        updateStatsDisplay();
+        updateTimerDisplay();
         
     </script>
 </body>
