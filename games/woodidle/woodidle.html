@@ -35,7 +35,7 @@
             box-shadow: 0 0 15px var(--retro-green);
             padding: 15px;
             margin: 20px;
-            position: relative; /* Needed for inventory positioning */
+            position: relative;
         }
 
         /* Title */
@@ -68,19 +68,31 @@
             gap: 20px;
         }
 
-        /* Tree Section */
-        #tree-section {
-            text-align: center;
-        }
-
-        #tree-image-placeholder {
+        /* Tree Section & Sprite Container */
+        #tree-image-container {
             width: 150px;
             height: 150px;
-            background-color: var(--dark-green);
-            border: 2px solid var(--retro-green);
+            /* Remove dark-green background to show image */
+            /* border: 2px solid var(--retro-green); /* Optional border */
             line-height: 150px;
             margin: 0 auto 10px;
             font-size: 0.9em;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background-color: var(--dark-green); /* Fallback/background for image area */
+            border: 2px solid var(--retro-green);
+        }
+
+        #tree-sprite {
+            max-width: 100%;
+            max-height: 100%;
+            image-rendering: pixelated; /* Essential for a good retro look! */
+        }
+        
+        #tree-section {
+            text-align: center;
         }
 
         /* Action Section */
@@ -173,7 +185,7 @@
             border-top: 1px dashed var(--retro-green);
             margin-top: 15px;
             font-size: 0.9em;
-            position: relative; /* Needed for inventory button */
+            position: relative;
         }
 
         /* Inventory Toggle Button */
@@ -188,7 +200,7 @@
             cursor: pointer;
             font-family: var(--font-family);
             font-size: 0.8em;
-            transform: translateY(100%); /* Position below the bottom bar */
+            transform: translateY(100%);
         }
         #inventory-toggle-button:hover {
             background-color: var(--dark-green);
@@ -197,7 +209,7 @@
         /* Inventory Window */
         #inventory {
             position: absolute;
-            bottom: 30px; /* Above the toggle button */
+            bottom: 30px;
             right: 0;
             width: 200px;
             max-height: 250px;
@@ -206,7 +218,7 @@
             border: 2px solid var(--retro-green);
             padding: 10px;
             box-shadow: 0 0 10px var(--retro-green);
-            display: none; /* Hidden by default */
+            display: none;
             z-index: 10;
         }
         #inventory.open {
@@ -264,7 +276,9 @@
 
         <div id="main-area">
             <div id="tree-section">
-                <div id="tree-image-placeholder">[Tree Image Here]</div>
+                <div id="tree-image-container">
+                    <img id="tree-sprite" src="" alt="Current Tree Sprite">
+                </div>
                 <div id="tree-info">
                     <p>Current Tree: <span id="current-tree-name"></span></p>
                     <p>Required Level: <span id="required-level"></span></p>
@@ -300,13 +314,13 @@
     <script>
         // --- Game Data Models ---
 
-        // Define tree properties
+        // Define tree properties. Added 'sprite' property for file name handling.
         const TREES = {
-            regular: { name: 'Regular', requiredLevel: 1, baseTime: 3000, xp: 25 },
-            oak:     { name: 'Oak',     requiredLevel: 15, baseTime: 4500, xp: 35 },
-            willow:  { name: 'Willow',  requiredLevel: 30, baseTime: 6000, xp: 50 },
-            yew:     { name: 'Yew',     requiredLevel: 60, baseTime: 8000, xp: 70 },
-            redwood: { name: 'Redwood', requiredLevel: 90, baseTime: 12000, xp: 100 }
+            regular: { name: 'Regular', requiredLevel: 1, baseTime: 3000, xp: 25, sprite: 'regular-tree.png' },
+            oak:     { name: 'Oak',     requiredLevel: 15, baseTime: 4500, xp: 35, sprite: 'oak-tree.png' },
+            willow:  { name: 'Willow',  requiredLevel: 30, baseTime: 6000, xp: 50, sprite: 'willow-tree.png' },
+            yew:     { name: 'Yew',     requiredLevel: 60, baseTime: 8000, xp: 70, sprite: 'yew-tree.png' },
+            redwood: { name: 'Redwood', requiredLevel: 90, baseTime: 12000, xp: 100, sprite: 'redwood-tree.png' }
         };
 
         // Define axe properties
@@ -318,6 +332,9 @@
             { name: 'Diamond Axe',  requiredLevel: 70, speedBoost: 0.50 },
             { name: 'Ultimate Axe', requiredLevel: 95, speedBoost: 0.65 }
         ];
+
+        // Base path for the sprites folder
+        const SPRITE_PATH = 'sprites/';
 
         // --- Leveling Formula ---
         function calculateXPForLevel(level) {
@@ -331,7 +348,6 @@
         let game = {
             level: 1,
             currentXP: 0,
-            // Changed logs to be an object for inventory
             inventory: { 
                 regular: 0, oak: 0, willow: 0, yew: 0, redwood: 0
             },
@@ -357,7 +373,7 @@
             timerText: document.getElementById('timer-text'),
             treeSelectButtons: document.getElementById('tree-select-buttons'),
             notifications: document.getElementById('notifications'),
-            treeImagePlaceholder: document.getElementById('tree-image-placeholder'),
+            treeSprite: document.getElementById('tree-sprite'), // Updated to target the <img> element
             inventoryWindow: document.getElementById('inventory'),
             inventoryList: document.getElementById('inventory-list'),
             inventoryToggleButton: document.getElementById('inventory-toggle-button'),
@@ -371,7 +387,6 @@
             if (savedGame) {
                 const loadedData = JSON.parse(savedGame);
                 Object.assign(game, loadedData);
-                // Ensure inventory structure is complete even if older save is loaded
                 game.inventory = {...game.inventory, ...loadedData.inventory};
                 game.currentAxe = determineBestAxe(game.level);
             }
@@ -385,7 +400,7 @@
             localStorage.setItem('lumberjackLegends', JSON.stringify({
                 level: game.level,
                 currentXP: game.currentXP,
-                inventory: game.inventory, // Save inventory object
+                inventory: game.inventory,
                 currentTree: game.currentTree,
             }));
         }
@@ -401,11 +416,14 @@
                 ? `XP to Lvl ${game.level + 1}: ${xpRemaining.toLocaleString()}`
                 : 'MAX LEVEL! (99)';
 
-            // Tree Info
+            // Tree Info & Sprite
             const treeData = TREES[game.currentTree];
             D.currentTreeName.textContent = treeData.name;
             D.requiredLevel.textContent = treeData.requiredLevel;
-            D.treeImagePlaceholder.textContent = `[${treeData.name} Tree]`;
+            // --- SPRITE UPDATE LOGIC ---
+            D.treeSprite.src = SPRITE_PATH + treeData.sprite;
+            D.treeSprite.alt = `${treeData.name} Tree`;
+
 
             // Axe & Total Logs
             const boostPercentage = (game.currentAxe.speedBoost * 100).toFixed(0);
@@ -466,7 +484,6 @@
             let leveledUp = false;
 
             while (game.level < 99 && game.currentXP >= calculateXPForLevel(game.level)) {
-                // To maintain classic XP logic, don't subtract XP on level up, just proceed to the next level's requirement.
                 game.level++;
                 leveledUp = true;
             }
@@ -479,7 +496,7 @@
                     notify(`Axe unlocked! You are now using the ${game.currentAxe.name}! ⛏️`);
                 }
                 notify(`Congratulations! You reached Woodcutting Level ${game.level}! 🎉`);
-                selectTree(game.currentTree); // Re-evaluate tree selection based on new level
+                selectTree(game.currentTree);
             }
 
             updateDisplay();
@@ -538,7 +555,6 @@
             const treeData = TREES[game.currentTree];
             const treeKey = game.currentTree;
 
-            // Log is added to the specific inventory slot
             game.inventory[treeKey]++; 
             gainXP(treeData.xp);
 
@@ -546,7 +562,6 @@
             D.timerText.textContent = `Got a ${treeData.name} log! Ready to chop!`;
             notify(`+1 ${treeData.name} Log, +${treeData.xp} XP`);
             
-            // Update the inventory display if it's open
             if (game.isInventoryOpen) {
                 updateInventoryDisplay();
             }
