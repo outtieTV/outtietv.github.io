@@ -3,24 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minesweeper - Safe Opening</title>
+    <title>Minesweeper</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             display: flex;
             justify-content: center;
+            /* Align to the top of the viewport */
             align-items: flex-start;
             min-height: 100vh;
             background-color: #f0f0f0;
             margin: 20px 0;
+            padding: 0;
+            width: 100%;
         }
 
         .container {
             text-align: center;
             background: #fff;
-            padding: 20px;
+            padding: 20px 0; /* Reduced horizontal padding */
             border-radius: 8px;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            max-width: 100%; /* Important for mobile layout */
+            margin: 0 auto;
         }
 
         h1 {
@@ -28,8 +33,9 @@
             margin-bottom: 10px;
         }
 
-        .controls, .game-info {
+        .controls, .game-info, #message {
             margin-bottom: 20px;
+            padding: 0 20px; /* Add padding back to controls/info for separation */
         }
 
         #difficulty, #newGameBtn {
@@ -51,17 +57,27 @@
             background-color: #45a049;
         }
 
+        /* --- New Wrapper for Horizontal Scrolling on Mobile --- */
+        .board-wrapper {
+            max-width: 100vw; /* Use full viewport width */
+            overflow-x: auto; /* Enable horizontal scrolling */
+            padding-bottom: 10px; /* Space for the scrollbar */
+            box-sizing: border-box;
+            /* Ensure controls above and below are centered over the wrapper */
+            width: fit-content;
+            margin: 0 auto;
+        }
+        
         /* Game Board Styling */
         #game-board {
-            display: inline-block;
+            display: grid; /* Use grid layout */
+            /* Classic 3D border effect */
             border: 3px solid #7b7b7b;
             border-right-color: #fff;
             border-bottom-color: #fff;
             background-color: #c0c0c0;
-        }
-
-        .row {
-            display: flex;
+            /* Prevent the grid from shrinking below its content size */
+            width: fit-content; 
         }
 
         .cell {
@@ -73,6 +89,7 @@
             font-size: 16px;
             cursor: pointer;
             background-color: #d1d1d1;
+            /* Classic 3D button effect for unrevealed cell */
             border: 3px solid;
             border-color: #fff #7b7b7b #7b7b7b #fff;
             user-select: none;
@@ -150,8 +167,13 @@
             Time: <span id="timer">0</span>s
         </div>
 
-        <div id="game-board">
+        <!-- NEW WRAPPER FOR SCROLLING -->
+        <div class="board-wrapper">
+            <div id="game-board">
+                <!-- Grid will be generated here by JavaScript -->
             </div>
+        </div>
+        <!-- END WRAPPER -->
 
         <div id="message" class="hidden"></div>
     </div>
@@ -236,8 +258,8 @@
 
         /**
          * Places mines and calculates adjacent mine counts.
-         * The central logic has been updated to ensure the starting cell (r, c) 
-         * and its 8 neighbors are SAFE (no mines).
+         * Ensures the starting cell (r, c) and its 8 neighbors are SAFE (no mines),
+         * guaranteeing an initial opening/cascade reveal.
          */
         function placeMinesAndCalculateCounts(startRow, startCol) {
             let minesToPlace = mines;
@@ -448,7 +470,6 @@
          */
         function renderBoard() {
             boardElement.innerHTML = ''; 
-            boardElement.style.display = 'grid';
             boardElement.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
 
             for (let r = 0; r < rows; r++) {
