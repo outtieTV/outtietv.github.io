@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Index</title>
+  <title>Project Index</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Inter', Arial, sans-serif;
       background: #f8f9fa;
       color: #333;
       padding: 1rem;
@@ -33,7 +33,7 @@
     .list-container {
       background: #fff;
       padding: 1.5rem;
-      border-radius: 10px;
+      border-radius: 12px; /* Added slight rounding */
       box-shadow: 0 4px 10px rgba(0,0,0,0.1);
       flex: 1; /* Allows containers to grow/shrink equally */
     }
@@ -45,6 +45,11 @@
       margin: 0.5rem 0;
       padding: 0.75rem 0;
       border-bottom: 1px solid #eee;
+      border-radius: 6px;
+      transition: background-color 0.2s;
+    }
+    li:hover {
+        background-color: #f0f8ff; /* Subtle hover effect */
     }
     li:last-child {
       border-bottom: none;
@@ -52,23 +57,20 @@
     a {
       text-decoration: none;
       color: #333;
-      font-weight: normal;
-      display: block; /* Make the whole li clickable/linkable area */
+      font-weight: 500;
+      padding: 0 1rem;
+      display: block; /* Make the whole area clickable */
       transition: color 0.2s;
     }
     a:hover {
       color: #007acc;
-      text-decoration: underline;
+      text-decoration: none; /* Removed underline on hover since li has background change */
     }
 
     /* Media query for desktop/larger screens */
     @media (min-width: 768px) {
       .content-container {
         flex-direction: row; /* Horizontal on desktop */
-      }
-      .list-container {
-        /* Ensure equal width on desktop */
-        min-width: 0;
       }
     }
   </style>
@@ -107,9 +109,18 @@
 		  files.sort().forEach(file => { // auto sort alphabetically
 			const li = document.createElement("li");
 			const link = document.createElement("a");
-			link.href = `./${directory}/${file}`;
-			// Remove the extension for display text
-			link.textContent = file.replace(/\.(html|htm)$/i, "");
+
+            // 1. Calculate the clean name (basename) by stripping the extension
+            const cleanFilename = file.replace(/\.(html|htm)$/i, "");
+            
+            // 2. Set the href using the clean name. 
+            // e.g., 'pong.html' in 'games' now links to './games/pong'
+            // This aligns with your Jekyll permalink: /:basename/ setting
+			link.href = `./${directory}/${cleanFilename}`; 
+
+            // 3. Set the visible text (already stripped of extension)
+			link.textContent = cleanFilename.charAt(0).toUpperCase() + cleanFilename.slice(1); // Capitalize first letter
+
 			li.appendChild(link);
 			list.appendChild(li);
 		  });
@@ -122,7 +133,7 @@
 		} catch (err) {
 		  console.error(err);
 		  // Display a user-friendly error message
-		  list.innerHTML = `<li>Could not load ${directory} list.</li>`;
+		  list.innerHTML = `<li>Could not load ${directory} list. (Check if ${jsonPath} exists)</li>`;
 		}
 	  }
 
