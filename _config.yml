@@ -1,0 +1,19 @@
+# Site-wide configuration settings for Jekyll
+# This file is processed by GitHub Pages automatically.
+
+title: "OuttieTV\'s Github Site"
+description: "OuttieTV\'s Collection of Useful Tools and Fun Games"
+
+# Permalinks: controls the URL format for posts and pages.
+# /:basename/ results in clean URLs like /about/ or /2025-01-01-post-title/
+permalink: /:basename/
+
+# To make sure GitHub Pages doesn't try to use a default gem-based theme,
+# you can explicitly set an empty theme, although omitting it often works fine
+# if you are providing your own layouts. (I've omitted it here for a truly minimal file.)
+# theme: null
+
+# Configuration for the kramdown Markdown parser (optional but helpful)
+kramdown:
+  # Instructs kramdown to parse HTML blocks for Jekyll Liquid variables.
+  parse_block_html: true
