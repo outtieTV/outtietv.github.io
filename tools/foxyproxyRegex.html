@@ -38,7 +38,7 @@
 <body>
   <div class="wrap">
     <h1>Single-Line Domain Regex Generator</h1>
-    <p>Enter a domain (e.g., <span class="mono">example.com</span>) to generate a single regex that matches protocol/bare/subdomain forms, with optional ports and paths.</p>
+    <p>Enter a domain (e.g., <span class="mono">example.com</span>) to generate a single regex that matches protocol/bare/subdomain forms, with optional ports, user info, and paths.</p>
 
     <div class="card">
       <div class="row">
@@ -76,7 +76,7 @@
       </div>
     </div>
 
-    <div class="footer">Tip: Works with optional ports (<span class="mono">:8080</span>) and paths (<span class="mono">/foo/bar</span>).</div>
+    <div class="footer">Tip: Works with optional ports (<span class="mono">:8080</span>), **user info** (<span class="mono">user:pass@</span>), and paths (<span class="mono">/foo/bar</span>).</div>
   </div>
 
 <script>
@@ -87,8 +87,24 @@
 
   function buildRegexString(domain) {
     const escaped = escapeRegExp(domain.trim());
-    // ^(?:.*://(?:.*\.)?DOMAIN(?::\d+)?(?:/.*)?|DOMAIN(?::\d+)?(?:/.*)?|(?:.*\.)DOMAIN(?::\d+)?(?:/.*)?)$
-    return `^(?:.*://(?:.*\\.)?${escaped}(?::\\d+)?(?:/.*)?|${escaped}(?::\\d+)?(?:/.*)?|(?:.*\\.)${escaped}(?::\\d+)?(?:/.*)?)$`;
+    // The user-info part: (?:[\w\d]+:[\w\d]+@)?
+    // This allows for optional username:password@ before the domain.
+
+    const userInfo = '(?:[\\w\\d]+:[\\w\\d]+@)?';
+
+    // The full regex is structured as 3 OR clauses, each containing the new optional user-info part.
+    // 1. Full URI form: scheme://[user:pass@]domain[:port][/path...]
+    const pattern1 = `.*://${userInfo}(?:.*\\.)?${escaped}(?::\\d+)?(?:/.*)?`;
+
+    // 2. Bare domain form: domain[:port][/path...]
+    const pattern2 = `${escaped}(?::\\d+)?(?:/.*)?`;
+
+    // 3. Subdomain form: subdomain.domain[:port][/path...]
+    // Note: The user-info is NOT part of this one as it only applies with a scheme://
+    const pattern3 = `(?:.*\\.)${escaped}(?::\\d+)?(?:/.*)?`;
+
+
+    return `^(?:${pattern1}|${pattern2}|${pattern3})$`;
   }
 
   function defaultTests(domain) {
@@ -97,6 +113,8 @@
       `http://${domain}/`,
       `http://${domain}:8080`,
       `http://${domain}:8080/path`,
+      // New test with user:pass@
+      `https://user:pass@sub.${domain}:3000/auth`, 
       `https://sub.${domain}`,
       `https://sub.${domain}:3000/login`,
       `${domain}`,
