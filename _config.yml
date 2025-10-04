@@ -1,8 +1,8 @@
 # Site-wide configuration settings for Jekyll
 # This file is processed by GitHub Pages automatically.
 
-title: "OuttieTV\'s Github Site"
-description: "OuttieTV\'s Collection of Useful Tools and Fun Games"
+title: "OuttieTV's Github Site"
+description: "OuttieTV's Collection of Useful Tools and Fun Games"
 
 # Permalinks: controls the URL format for posts and pages.
 # /:basename/ results in clean URLs like /about/ or /2025-01-01-post-title/
