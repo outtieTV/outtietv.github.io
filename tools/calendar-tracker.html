@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Tracker: Days To & Days From</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --primary-dark: #6366f1;
+        }
+
+        /* Base styles for light mode */
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s, color 0.3s;
+            background-color: #f3f4f6; /* Tailwind: bg-gray-100 */
+            color: #1f2937; /* Tailwind: text-gray-800 */
+        }
+        .card {
+            background-color: #ffffff; /* Tailwind: bg-white */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Dark mode overrides */
+        .dark body {
+            background-color: #111827; /* Tailwind: bg-gray-900 */
+            color: #d1d5db; /* Tailwind: text-gray-300 */
+        }
+        .dark .card {
+            background-color: #1f2937; /* Tailwind: bg-gray-800 */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* Utility for date/time input formatting */
+        input[type="datetime-local"], select {
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background-color: #f9fafb; /* Light mode input background */
+            border: 1px solid #d1d5db;
+        }
+        .dark input[type="datetime-local"], .dark select {
+            background-color: #374151; /* Dark mode input background */
+            border: 1px solid #4b5563;
+            color: #d1d5db;
+        }
+    </style>
+</head>
+<body class="min-h-screen transition-colors duration-300">
+
+    <div id="app" class="max-w-4xl mx-auto p-4 md:p-8">
+        
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-center mb-8 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <h1 class="text-4xl font-extrabold text-indigo-600 dark:text-indigo-400 mb-4 md:mb-0">Time Tracker</h1>
+            <div class="flex space-x-3">
+
+                <!-- Time Zone Button -->
+                <button id="timezone-config-btn" onclick="openTimeZoneModal()" title="Change Time Zone" class="p-3 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <svg class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5a2 2 0 002 2 2 2 0 012 2v1.5M21 12.97l-2.48.55-2.52 1.98-1.5 1.5-1.5 2.52-1.98 2.52-1.47 2.48M3.055 11A9.944 9.944 0 0112 2.055 9.944 9.944 0 0120.945 11h-17.89zM12 21a9 9 0 01-9-9"></path></svg>
+                </button>
+                
+                <!-- Theme Toggle -->
+                <button id="theme-toggle" onclick="toggleTheme()" title="Toggle Theme" class="p-3 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <svg id="moon-icon" class="w-6 h-6 text-gray-600 dark:text-gray-300 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                    <svg id="sun-icon" class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                </button>
+
+                <!-- Add Topic Button -->
+                <button onclick="openAddModal()" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50">
+                    <svg class="w-5 h-5 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                    Add Topic
+                </button>
+            </div>
+        </header>
+
+        <!-- Data Management -->
+        <div class="flex justify-center space-x-4 mb-6">
+            <button onclick="exportData()" class="px-4 py-2 text-sm text-indigo-700 bg-indigo-100 rounded-lg hover:bg-indigo-200 dark:text-indigo-200 dark:bg-indigo-900 dark:hover:bg-indigo-800 transition duration-150">
+                Export JSON
+            </button>
+            <label for="import-file" class="cursor-pointer px-4 py-2 text-sm text-green-700 bg-green-100 rounded-lg hover:bg-green-200 dark:text-green-200 dark:bg-green-900 dark:hover:bg-green-800 transition duration-150">
+                Import JSON
+                <input type="file" id="import-file" class="hidden" accept=".json" onchange="importData(event)">
+            </label>
+        </div>
+
+        <!-- Topics List Container -->
+        <div id="topics-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Topics will be dynamically inserted here -->
+        </div>
+
+        <!-- Empty State Message -->
+        <div id="empty-state" class="text-center p-12 card rounded-xl dark:border-gray-700 hidden">
+            <p class="text-xl font-semibold text-gray-500 dark:text-gray-400">
+                No time-tracking topics added yet.
+            </p>
+            <p class="text-gray-400 dark:text-gray-500 mt-2">
+                Click "Add Topic" to start counting days!
+            </p>
+        </div>
+        
+        <!-- Confirmation/Alert Modal (instead of alert/confirm) -->
+        <div id="app-message" class="fixed top-5 right-5 z-50 transition-opacity duration-300 opacity-0 pointer-events-none">
+            <!-- Message content goes here -->
+        </div>
+
+    </div>
+
+    <!-- Modal for Adding/Editing Topic -->
+    <div id="topic-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="card w-full max-w-md p-6 rounded-xl transform transition-transform duration-300 scale-95 dark:border dark:border-gray-700">
+            <h2 id="modal-title" class="text-2xl font-bold mb-4">Add New Topic</h2>
+            <form id="topic-form" onsubmit="handleFormSubmit(event)">
+                <input type="hidden" id="topic-id">
+
+                <div class="mb-4">
+                    <label for="topic-name" class="block text-sm font-medium mb-1">Name of Topic:</label>
+                    <input type="text" id="topic-name" required placeholder="e.g., Anniversary, Quit Smoking, Next Trip"
+                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200" maxlength="50">
+                </div>
+
+                <div class="mb-6 space-y-3">
+                    <p class="text-sm font-medium mb-2">Select Counter Type:</p>
+                    
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                        <input type="radio" name="topic-type" value="to" required checked class="form-radio text-indigo-600 h-4 w-4 dark:bg-gray-700 dark:border-gray-600">
+                        <span class="text-sm">Days To (Countdown):</span>
+                    </label>
+
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                        <input type="radio" name="topic-type" value="from" required class="form-radio text-indigo-600 h-4 w-4 dark:bg-gray-700 dark:border-gray-600">
+                        <span class="text-sm">Days From (Count Up):</span>
+                    </label>
+                </div>
+
+                <div class="mb-6">
+                    <label for="target-date" class="block text-sm font-medium mb-1">Target Date and Time (YYYY-MM-DD HH:MM):</label>
+                    <input type="datetime-local" id="target-date" required
+                           class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        The countdown will hit zero at this absolute time, regardless of your display time zone.
+                    </p>
+                </div>
+
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="closeModal('topic-modal')" class="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 transition duration-150">
+                        Cancel
+                    </button>
+                    <button type="submit" id="modal-submit-btn" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150">
+                        Add Topic
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Time Zone Selector -->
+    <div id="timezone-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="card w-full max-w-sm p-6 rounded-xl transform transition-transform duration-300 scale-95 dark:border dark:border-gray-700">
+            <h2 class="text-2xl font-bold mb-4">Time Zone Setting</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                This setting affects how target dates are displayed, not the absolute countdown timing.
+            </p>
+            <form id="timezone-form" onchange="changeTimeZonePreference()">
+                <div class="space-y-4 mb-6">
+                    
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                        <input type="radio" name="tz-type" value="system" id="tz-system" class="form-radio text-indigo-600 h-4 w-4 dark:bg-gray-700 dark:border-gray-600">
+                        <span class="text-sm font-medium">Local/System Time Zone</span>
+                    </label>
+
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                        <input type="radio" name="tz-type" value="custom" id="tz-custom-radio" class="form-radio text-indigo-600 h-4 w-4 dark:bg-gray-700 dark:border-gray-600">
+                        <span class="text-sm font-medium">Custom Time Zone:</span>
+                    </label>
+                    
+                    <select id="custom-timezone-select" onchange="document.getElementById('tz-custom-radio').checked = true; changeTimeZonePreference();"
+                        class="w-full mt-2" disabled>
+                        <!-- Options populated by JS -->
+                    </select>
+
+                </div>
+
+                <div class="flex justify-end">
+                    <button type="button" onclick="closeModal('timezone-modal')" class="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 transition duration-150">
+                        Close
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <script>
+        // --- GLOBAL STATE AND CONFIGURATION ---
+        const LOCAL_STORAGE_KEY = 'timeTrackerTopics';
+        const TIME_ZONE_KEY = 'timeTrackerTimeZone';
+        let topics = [];
+        let intervalId = null;
+        let currentTimeZone = 'system'; // 'system' or an IANA time zone string (e.g., 'America/New_York')
+
+        // --- UTILITY FUNCTIONS ---
+
+        /**
+         * Generates a simple unique ID.
+         * @returns {string}
+         */
+        const generateId = () => '_' + Math.random().toString(36).substr(2, 9);
+
+        /**
+         * Shows a temporary message/alert box.
+         * @param {string} message The message content.
+         * @param {string} type 'success' or 'error'.
+         */
+        const showMessage = (message, type = 'success') => {
+            const container = document.getElementById('app-message');
+            const colorClass = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+            const html = `
+                <div class="${colorClass} text-white px-4 py-3 rounded-lg shadow-xl font-medium">
+                    ${message}
+                </div>
+            `;
+            
+            container.innerHTML = html;
+            container.classList.remove('opacity-0', 'pointer-events-none');
+            container.classList.add('opacity-100');
+
+            setTimeout(() => {
+                container.classList.add('opacity-0', 'pointer-events-none');
+                container.classList.remove('opacity-100');
+            }, 3000);
+        };
+
+        // --- LOCAL STORAGE AND DATA MANAGEMENT ---
+
+        /**
+         * Loads topics from local storage and initializes the app.
+         */
+        const loadData = () => {
+            try {
+                const storedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+                if (storedData) {
+                    topics = JSON.parse(storedData);
+                }
+            } catch (error) {
+                console.error('Error loading data from local storage:', error);
+                showMessage('Error loading topics. Local storage might be corrupt.', 'error');
+                topics = [];
+            }
+        };
+
+        /**
+         * Saves the current topics array to local storage.
+         */
+        const saveData = () => {
+            try {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(topics));
+            } catch (error) {
+                console.error('Error saving data to local storage:', error);
+                showMessage('Error saving data. Local storage full?', 'error');
+            }
+        };
+
+        /**
+         * Exports the current data as a JSON file download.
+         */
+        const exportData = () => {
+            const dataStr = JSON.stringify(topics, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+
+            const exportFileDefaultName = `time_tracker_export_${new Date().toISOString().slice(0, 10)}.json`;
+
+            let linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+            showMessage('Data successfully exported as JSON.');
+        };
+
+        /**
+         * Imports data from a user-selected JSON file.
+         * @param {Event} event The change event from the file input.
+         */
+        const importData = (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedTopics = JSON.parse(e.target.result);
+                    if (Array.isArray(importedTopics)) {
+                        // Basic validation to ensure imported data looks correct
+                        const isValid = importedTopics.every(t => t.id && t.title && t.targetDate && (t.type === 'to' || t.type === 'from'));
+                        if (isValid || importedTopics.length === 0) {
+                            topics = importedTopics;
+                            saveData();
+                            renderTopics();
+                            showMessage(`${topics.length} topics imported successfully!`);
+                        } else {
+                            showMessage('Import failed: File format is invalid or missing required fields.', 'error');
+                        }
+                    } else {
+                        showMessage('Import failed: JSON content is not a valid list.', 'error');
+                    }
+                } catch (error) {
+                    console.error('Import error:', error);
+                    showMessage('Import failed: Invalid JSON file content.', 'error');
+                }
+            };
+            reader.readAsText(file);
+            // Reset the input value so the same file can be imported again
+            event.target.value = ''; 
+        };
+
+        // --- DATE CALCULATION LOGIC (Time Zone Agnostic) ---
+
+        /**
+         * Calculates the days, hours, and minutes remaining/elapsed.
+         * @param {object} topic The topic object.
+         * @returns {object} Calculated time difference details.
+         */
+        const calculateDays = (topic) => {
+            // Target date is interpreted in the time zone the user's browser was in when they set it.
+            const target = new Date(topic.targetDate).getTime();
+            const now = new Date().getTime();
+            
+            // Difference in milliseconds (absolute duration)
+            const diffMs = topic.type === 'to' ? target - now : now - target;
+            const absoluteDiffMs = Math.abs(diffMs);
+
+            // Handle past 'to' dates or future 'from' dates
+            const isFinished = topic.type === 'to' && diffMs < 0;
+            const isFutureFrom = topic.type === 'from' && diffMs < 0;
+
+            if (isFinished) {
+                return { 
+                    days: 0, hours: 0, minutes: 0, seconds: 0,
+                    isFinished: true, isFutureFrom: false,
+                    timeDisplay: "Countdown Ended!", subTimeDisplay: ""
+                };
+            }
+            if (isFutureFrom) {
+                 return { 
+                    days: 0, hours: 0, minutes: 0, seconds: 0,
+                    isFinished: false, isFutureFrom: true,
+                    timeDisplay: "Target is in the future", subTimeDisplay: ""
+                };
+            }
+
+            // Calculate days, hours, minutes, seconds
+            const totalSeconds = Math.floor(absoluteDiffMs / 1000);
+            const seconds = totalSeconds % 60;
+            const totalMinutes = Math.floor(totalSeconds / 60);
+            const minutes = totalMinutes % 60;
+            const totalHours = Math.floor(totalMinutes / 60);
+            const hours = totalHours % 24;
+            const days = Math.floor(totalHours / 24);
+
+            let timeDisplay = `${days} ${days === 1 ? 'DAY' : 'DAYS'}`;
+            const subTimeDisplay = (totalHours > 0 || totalMinutes > 0) 
+                                ? `${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s` 
+                                : "";
+            
+            return {
+                days, hours, minutes, seconds,
+                isFinished: false, isFutureFrom: false,
+                timeDisplay, subTimeDisplay
+            };
+        };
+
+
+        // --- UI RENDERING AND TOPIC MANAGEMENT ---
+
+        /**
+         * Formats the target date string based on the selected time zone.
+         * @param {string} dateString The ISO datetime-local string.
+         * @returns {string} The formatted date string.
+         */
+        const formatTargetDate = (dateString) => {
+            const targetDateObj = new Date(dateString);
+            
+            const options = {
+                year: 'numeric', month: 'short', day: 'numeric',
+                hour: '2-digit', minute: '2-digit', hour12: false
+            };
+            
+            // If currentTimeZone is 'system', Intl uses browser default (undefined timezone)
+            if (currentTimeZone !== 'system') {
+                options.timeZone = currentTimeZone;
+                options.timeZoneName = 'short';
+            } else {
+                 options.timeZoneName = 'short';
+            }
+
+            return targetDateObj.toLocaleString(navigator.language || 'en-US', options);
+        };
+
+
+        /**
+         * Renders all topics to the DOM.
+         */
+        const renderTopics = () => {
+            const listContainer = document.getElementById('topics-list');
+            listContainer.innerHTML = '';
+            
+            if (topics.length === 0) {
+                document.getElementById('empty-state').classList.remove('hidden');
+            } else {
+                document.getElementById('empty-state').classList.add('hidden');
+                
+                topics.forEach(topic => {
+                    const diff = calculateDays(topic);
+                    const isCountdown = topic.type === 'to';
+                    
+                    let timeText = diff.timeDisplay;
+                    
+                    if (diff.isFinished) {
+                        timeText = "Countdown ended";
+                    } else if (diff.isFutureFrom) {
+                        timeText = "Target is in the future";
+                    }
+                    
+                    const formattedTarget = formatTargetDate(topic.targetDate);
+
+                    const card = document.createElement('div');
+                    card.className = `card p-6 rounded-xl border-t-4 ${isCountdown ? 'border-indigo-500' : 'border-green-500'} transition-all duration-300 hover:shadow-lg dark:border dark:border-gray-700`;
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h3 class="text-xl font-bold mb-1 break-words">${topic.title}</h3>
+                                <p class="text-xs font-semibold uppercase ${isCountdown ? 'text-indigo-500' : 'text-green-500'}">
+                                    ${isCountdown ? 'DAYS TO' : 'DAYS FROM'}
+                                </p>
+                            </div>
+                            <button onclick="openEditModal('${topic.id}')" title="Edit/Remove Topic" class="text-gray-400 hover:text-indigo-500 dark:hover:text-indigo-400 p-2 rounded-full transition duration-150">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.257.485 2.917-.181z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                            </button>
+                        </div>
+                        
+                        <!-- Main Time Display -->
+                        <div class="text-5xl font-extrabold text-gray-900 dark:text-white mb-2 leading-none">
+                            ${timeText}
+                        </div>
+
+                        <!-- Sub-Time Display (Hours/Minutes/Seconds) -->
+                        <p class="text-sm text-gray-500 dark:text-gray-400 h-5">
+                            ${diff.subTimeDisplay}
+                        </p>
+
+                        <p class="text-xs text-gray-400 dark:text-gray-500 mt-4 pt-3 border-t border-dashed border-gray-200 dark:border-gray-700">
+                            Target Time (in selected TZ): ${formattedTarget}
+                        </p>
+                    `;
+                    listContainer.appendChild(card);
+                });
+            }
+        };
+
+        /**
+         * Clears the current interval, updates all topics, and sets a new interval.
+         */
+        const startUpdateInterval = () => {
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+            renderTopics();
+            // Update every second for hour/minute/second precision
+            intervalId = setInterval(renderTopics, 1000); 
+        };
+
+        /**
+         * Handles the form submission for adding or editing a topic.
+         * @param {Event} event The form submit event.
+         */
+        const handleFormSubmit = (event) => {
+            event.preventDefault();
+
+            const id = document.getElementById('topic-id').value;
+            const title = document.getElementById('topic-name').value.trim();
+            const targetDate = document.getElementById('target-date').value;
+            const type = document.querySelector('input[name="topic-type"]:checked').value;
+
+            if (!title || !targetDate) {
+                showMessage('Please fill in both the topic name and target date/time.', 'error');
+                return;
+            }
+
+            const isEditing = id !== '';
+
+            if (isEditing) {
+                const topicIndex = topics.findIndex(t => t.id === id);
+                if (topicIndex !== -1) {
+                    topics[topicIndex].title = title;
+                    topics[topicIndex].targetDate = targetDate;
+                    topics[topicIndex].type = type;
+                    showMessage(`Topic "${title}" updated!`);
+                }
+            } else {
+                const newTopic = {
+                    id: generateId(),
+                    title,
+                    targetDate,
+                    type
+                };
+                topics.push(newTopic);
+                showMessage(`New topic "${title}" added!`);
+            }
+
+            saveData();
+            startUpdateInterval();
+            closeModal('topic-modal');
+        };
+
+        // --- MODAL AND UI CONTROLS ---
+
+        /**
+         * Opens the specified modal.
+         * @param {string} modalId The ID of the modal div.
+         */
+        const openModal = (modalId) => {
+            const modal = document.getElementById(modalId);
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.querySelector('.card').classList.remove('scale-95');
+            modal.querySelector('.card').classList.add('scale-100');
+        }
+        
+        /**
+         * Closes the specified modal.
+         * @param {string} modalId The ID of the modal div.
+         */
+        const closeModal = (modalId) => {
+            const modal = document.getElementById(modalId);
+            modal.querySelector('.card').classList.remove('scale-100');
+            modal.querySelector('.card').classList.add('scale-95');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+
+            if (modalId === 'topic-modal') {
+                // Clean up delete button after closing topic modal
+                const deleteBtn = document.getElementById('modal-delete-btn');
+                if (deleteBtn) {
+                    deleteBtn.remove();
+                }
+            }
+        };
+
+        const openAddModal = () => {
+            const form = document.getElementById('topic-form');
+            form.reset();
+            document.getElementById('topic-id').value = '';
+            document.getElementById('modal-title').textContent = 'Add New Topic';
+            document.getElementById('modal-submit-btn').textContent = 'Add Topic';
+            document.querySelector('input[name="topic-type"][value="to"]').checked = true;
+            openModal('topic-modal');
+        };
+
+        const openEditModal = (id) => {
+            const topic = topics.find(t => t.id === id);
+            if (!topic) return;
+
+            document.getElementById('topic-id').value = topic.id;
+            document.getElementById('topic-name').value = topic.title;
+            document.getElementById('target-date').value = topic.targetDate;
+            document.querySelector(`input[name="topic-type"][value="${topic.type}"]`).checked = true;
+
+            document.getElementById('modal-title').innerHTML = `Edit Topic: <span class="text-indigo-500">${topic.title}</span>`;
+            document.getElementById('modal-submit-btn').textContent = 'Save Changes';
+            
+            // Add remove button
+            const form = document.getElementById('topic-form');
+            let deleteBtn = form.querySelector('#modal-delete-btn');
+            if (!deleteBtn) {
+                deleteBtn = document.createElement('button');
+                deleteBtn.id = 'modal-delete-btn';
+                deleteBtn.type = 'button';
+                deleteBtn.className = 'px-4 py-2 text-red-700 bg-red-100 rounded-lg hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800 transition duration-150';
+                deleteBtn.innerHTML = 'Remove Topic';
+                
+                const buttonContainer = form.querySelector('.flex.justify-end.space-x-3');
+                buttonContainer.prepend(deleteBtn);
+            }
+            deleteBtn.onclick = () => {
+                // Use custom message box instead of window.confirm
+                const message = `Are you sure you want to remove the topic: ${topic.title}?`;
+                // Simple workaround for confirmation as per instructions, ideally a custom modal is used
+                if (window.confirm(message)) { 
+                    deleteTopic(topic.id);
+                } else {
+                    closeModal('topic-modal');
+                }
+            };
+            openModal('topic-modal');
+        };
+
+        /**
+         * Removes a topic by ID and updates storage and UI.
+         */
+        const deleteTopic = (id) => {
+            const initialLength = topics.length;
+            topics = topics.filter(t => t.id !== id);
+            
+            if (topics.length < initialLength) {
+                saveData();
+                startUpdateInterval();
+                showMessage('Topic successfully removed!');
+                closeModal('topic-modal');
+            } else {
+                showMessage('Failed to find topic for removal.', 'error');
+            }
+        };
+
+        // --- TIME ZONE LOGIC ---
+
+        /**
+         * Populates the custom time zone selector.
+         */
+        const populateTimeZones = () => {
+            const customSelect = document.getElementById('custom-timezone-select');
+            customSelect.innerHTML = '<option value="" disabled selected>Select a Time Zone</option>';
+            
+            if (Intl.supportedValuesOf) {
+                const timeZones = Intl.supportedValuesOf('timeZone');
+                timeZones.forEach(tz => {
+                    const option = document.createElement('option');
+                    option.value = tz;
+                    option.textContent = tz;
+                    customSelect.appendChild(option);
+                });
+                customSelect.disabled = false;
+            } else {
+                const option = document.createElement('option');
+                option.value = 'default';
+                option.textContent = 'Custom selection not supported by browser.';
+                customSelect.appendChild(option);
+                customSelect.disabled = true;
+            }
+        };
+
+        /**
+         * Loads time zone preference from local storage.
+         */
+        const loadTimeZone = () => {
+            const savedTz = localStorage.getItem(TIME_ZONE_KEY);
+            if (savedTz) {
+                currentTimeZone = savedTz;
+            }
+        };
+
+        /**
+         * Sets the UI elements in the time zone modal based on the current preference.
+         */
+        const setTimeZoneUI = () => {
+            const customSelect = document.getElementById('custom-timezone-select');
+            
+            if (currentTimeZone === 'system') {
+                document.getElementById('tz-system').checked = true;
+                customSelect.disabled = true;
+                customSelect.value = '';
+            } else {
+                document.getElementById('tz-custom-radio').checked = true;
+                customSelect.disabled = false;
+                // Check if the saved time zone exists in the list before setting
+                if (Array.from(customSelect.options).some(opt => opt.value === currentTimeZone)) {
+                    customSelect.value = currentTimeZone;
+                } else {
+                    // If custom TZ is invalid or missing, reset to system
+                    currentTimeZone = 'system';
+                    setTimeZoneUI(); 
+                    return;
+                }
+            }
+        };
+
+        /**
+         * Handles change events in the time zone modal form.
+         */
+        const changeTimeZonePreference = () => {
+            const tzType = document.querySelector('input[name="tz-type"]:checked').value;
+            const customSelect = document.getElementById('custom-timezone-select');
+
+            if (tzType === 'system') {
+                currentTimeZone = 'system';
+                customSelect.disabled = true;
+            } else if (tzType === 'custom') {
+                currentTimeZone = customSelect.value;
+                customSelect.disabled = false;
+            }
+            
+            if (currentTimeZone) {
+                localStorage.setItem(TIME_ZONE_KEY, currentTimeZone);
+                showMessage(`Time zone set to: ${currentTimeZone === 'system' ? 'Local/System' : currentTimeZone}`);
+                startUpdateInterval(); // Re-render topics to update date format
+            }
+        };
+
+        /**
+         * Opens the Time Zone selection modal.
+         */
+        const openTimeZoneModal = () => {
+            populateTimeZones();
+            setTimeZoneUI();
+            openModal('timezone-modal');
+        };
+
+        // --- THEME LOGIC ---
+
+        /**
+         * Toggles between light and dark themes.
+         */
+        const toggleTheme = () => {
+            const htmlElement = document.documentElement;
+            const isDark = htmlElement.classList.contains('dark');
+            
+            if (isDark) {
+                htmlElement.classList.remove('dark');
+                document.getElementById('sun-icon').classList.remove('hidden');
+                document.getElementById('moon-icon').classList.add('hidden');
+                localStorage.setItem('theme', 'light');
+            } else {
+                htmlElement.classList.add('dark');
+                document.getElementById('sun-icon').classList.add('hidden');
+                document.getElementById('moon-icon').classList.remove('hidden');
+                localStorage.setItem('theme', 'dark');
+            }
+        };
+
+        /**
+         * Applies theme settings on initial load.
+         */
+        const applyTheme = () => {
+            const savedTheme = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            let theme = 'light';
+            if (savedTheme) {
+                theme = savedTheme;
+            } else if (prefersDark) {
+                theme = 'dark';
+            }
+            
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+                document.getElementById('sun-icon').classList.add('hidden');
+                document.getElementById('moon-icon').classList.remove('hidden');
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.getElementById('sun-icon').classList.remove('hidden');
+                document.getElementById('moon-icon').classList.add('hidden');
+            }
+        };
+
+
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            applyTheme();
+            loadTimeZone();
+            loadData();
+            startUpdateInterval();
+        };
+
+        // Expose functions globally for HTML attributes
+        window.openAddModal = openAddModal;
+        window.openEditModal = openEditModal;
+        window.closeModal = closeModal;
+        window.handleFormSubmit = handleFormSubmit;
+        window.deleteTopic = deleteTopic;
+        window.toggleTheme = toggleTheme;
+        window.exportData = exportData;
+        window.importData = importData;
+        window.openTimeZoneModal = openTimeZoneModal;
+        window.changeTimeZonePreference = changeTimeZonePreference;
+    </script>
+</body>
+</html>
