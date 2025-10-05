@@ -1,353 +1,309 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Clock and Calendar</title>
-  <style>
-    /* Base Styles */
-    body {
-      background-color: #000;
-      margin: 0;
-      font-family: sans-serif;
-      color: white;
-    }
+  <meta charset="UTF-8">
+  <title>Clock and Calendar</title>
+  <style>
+    /* Base Styles */
+    body {
+      background-color: #000;
+      margin: 0;
+      font-family: sans-serif;
+      color: white;
+    }
 
-    /* --- NEW SETTINGS BUTTON & PANEL STYLES --- */
-    /* Cog Wheel Button (Always Visible) */
-    #settings-cog {
-      position: fixed;
-      top: 15px;
-      right: 15px;
-      z-index: 1001; /* Ensure it's above everything */
-      font-size: 28px;
-      cursor: pointer;
-      background: none;
-      border: none;
-      color: rgb(75, 139, 244); /* Blue color for visibility */
-      transition: transform 0.3s ease;
-      padding: 5px;
-      border-radius: 50%;
-    }
+    /* Controls */
+    .controls {
+      text-align: center;
+      margin: 10px 0;
+      transition: opacity 0.5s ease;
+    }
 
-    #settings-cog:hover {
-      transform: rotate(45deg); /* Simple animation on hover */
-      color: rgb(100, 160, 255);
-    }
+    .controls.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
 
-    /* Settings Panel (Holds the buttons) */
-    .controls {
-      position: fixed;
-      top: 55px; /* Position below the cog */
-      right: 10px;
-      z-index: 1000;
-      padding: 15px;
-      background-color: rgba(30, 30, 30, 0.95); /* Dark, slightly transparent background */
-      border-radius: 8px;
-      border: 1px solid rgb(75, 139, 244);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      transform: scale(0.9);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s ease, transform 0.3s ease;
-    }
+    .toggle-btn {
+      padding: 10px 20px;
+      font-size: 16px;
+      background: rgb(75, 139, 244);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      color: black;
+      font-weight: bold;
+      margin: 5px;
+    }
 
-    .controls.visible {
-      opacity: 1;
-      transform: scale(1);
-      pointer-events: auto;
-    }
-    /* --- END NEW STYLES --- */
+    .toggle-btn:hover {
+      background: rgb(100, 160, 255);
+    }
 
-    /* Controls Button Styles */
-    .toggle-btn {
-      padding: 10px 20px;
-      font-size: 16px;
-      background: rgb(75, 139, 244);
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      color: black;
-      font-weight: bold;
-      margin: 0; /* Removed margin from original */
-      width: 100%; /* Make buttons full width in panel */
-    }
+    /* Layout */
+    .clock-calendar {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: black;
+      gap: 20px;
+      padding: 20px;
+      flex-wrap: wrap;
+      min-height: 80vh;
+    }
 
-    .toggle-btn:hover {
-      background: rgb(100, 160, 255);
-    }
+    .clock, .calendar {
+      flex: 1 1 auto;
+      padding: 20px;
+      box-sizing: border-box;
+      border: 1px solid rgb(209, 217, 221);
+      border-radius: 10px;
+      background-color: rgb(75, 139, 244);
+    }
 
-    /* Layout */
-    .clock-calendar {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      background-color: black;
-      gap: 20px;
-      padding: 20px;
-      flex-wrap: wrap;
-      min-height: 100vh; /* Use 100vh for full viewport height */
-      box-sizing: border-box;
-    }
+    .calendar {
+      min-width: 250px;
+    }
 
-    .clock, .calendar {
-      flex: 1 1 auto;
-      padding: 20px;
-      box-sizing: border-box;
-      border: 1px solid rgb(209, 217, 221);
-      border-radius: 10px;
-      background-color: rgb(75, 139, 244);
-    }
+    /* Responsive Clock Container */
+    .clock {
+      width: 40vw; /* Scales with viewport width */
+      max-width: 250px; /* Upper limit for larger screens */
+      aspect-ratio: 1/1; 
+      margin: auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      position: relative;
+    }
 
-    .calendar {
-      min-width: 250px;
-    }
+    /* Analog Clock Specifics */
+    .clock.analog {
+      border-radius: 50%; /* Makes the container a circle */
+    }
 
-    /* Responsive Clock Container */
-    .clock {
-      width: 40vw;
-      max-width: 250px;
-      aspect-ratio: 1/1;
-      margin: auto;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      text-align: center;
-      position: relative;
-    }
+    .hand {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform-origin: bottom center;
+      transform: translate(-50%, -100%) rotate(0deg); 
+    }
 
-    /* Analog Clock Specifics */
-    .clock.analog {
-      border-radius: 50%;
-    }
+    #hours {
+      background: black;
+      height: 25%;
+      width: 5px;
+    }
 
-    .hand {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform-origin: bottom center;
-      transform: translate(-50%, -100%) rotate(0deg);
-    }
+    #minutes {
+      background: black;
+      height: 40%;
+      width: 4px;
+    }
 
-    #hours {
-      background: black;
-      height: 25%;
-      width: 5px;
-    }
+    #seconds {
+      background: red;
+      height: 45%;
+      width: 2px;
+    }
 
-    #minutes {
-      background: black;
-      height: 40%;
-      width: 4px;
-    }
+    /* Digital Clock Specifics (FIXED) */
+    .clock.digital {
+      border-radius: 10px; 
+      overflow: hidden; /* Ensure nothing visually spills over */
+    }
+    
+    #digital-time {
+      /* Use a 'min()' function or a smaller vw with max-font-size */
+      /* min(5vw, 40px) is an ideal but not universally supported solution */
+      /* We use: font-size: 5vw to scale, and a media query override below */
+      font-size: 5vw; 
+      font-weight: bold;
+      white-space: nowrap;
+      /* Max size fallback for large screens */
+      max-width: 100%; 
+    }
+    
+    /* Media Query for Desktop Font Size Constraint (The primary fix for overflow) */
+    @media (min-width: 769px) {
+      #digital-time {
+        /* Set a fixed maximum font size when 5vw becomes too large */
+        font-size: 40px; 
+      }
+    }
+    
+    /* Media Query for Mobile Optimization (Updated) */
+    @media (max-width: 768px) {
+      .clock {
+        width: 60vw; /* Make clock larger on smaller screens */
+      }
+      
+      #digital-time {
+        /* Increase font size relative to the smaller viewport */
+        font-size: 10vw; 
+      }
+      
+      .clock-calendar {
+        flex-direction: column; /* Stack clock and calendar vertically */
+      }
+    }
 
-    #seconds {
-      background: red;
-      height: 45%;
-      width: 2px;
-    }
+    /* Calendar Styles */
+    .calendar table td {
+      background-color: rgb(209, 217, 221);
+      color: black;
+    }
 
-    /* Digital Clock Specifics */
-    .clock.digital {
-      border-radius: 10px;
-      overflow: hidden;
-    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
 
-    #digital-time {
-      font-size: 5vw;
-      font-weight: bold;
-      white-space: nowrap;
-      max-width: 100%;
-    }
+    table th, table td {
+      border: 1px solid rgb(209, 217, 221);
+      padding: 8px;
+      text-align: center;
+    }
 
-    /* Media Query for Desktop Font Size Constraint */
-    @media (min-width: 769px) {
-      #digital-time {
-        font-size: 40px;
-      }
-    }
+    table th {
+      background-color: #ddd;
+    }
 
-    /* Media Query for Mobile Optimization */
-    @media (max-width: 768px) {
-      .clock {
-        width: 60vw;
-      }
-
-      #digital-time {
-        font-size: 10vw;
-      }
-
-      .clock-calendar {
-        flex-direction: column;
-      }
-    }
-
-    /* Calendar Styles */
-    .calendar table td {
-      background-color: rgb(209, 217, 221);
-      color: black;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    table th, table td {
-      border: 1px solid rgb(209, 217, 221);
-      padding: 8px;
-      text-align: center;
-    }
-
-    table th {
-      background-color: #ddd;
-    }
-
-    #current-day {
-      background-color: yellow !important;
-    }
-  </style>
+    #current-day {
+      background-color: yellow !important;
+    }
+  </style>
 </head>
 <body>
 
-  <div class="clock-calendar">
-    <div class="clock analog" id="clock">
-      <div id="hours" class="hand"></div>
-      <div id="minutes" class="hand"></div>
-      <div id="seconds" class="hand"></div>
-      <div id="digital-time" style="display:none;"></div>
-    </div>
+  <div class="clock-calendar">
+    <div class="clock analog" id="clock">
+      <div id="hours" class="hand"></div>
+      <div id="minutes" class="hand"></div>
+      <div id="seconds" class="hand"></div>
+      <div id="digital-time" style="display:none;"></div>
+    </div>
 
-    <div class="calendar">
-      <table id="calendar-table"></table>
-    </div>
-  </div>
+    <div class="calendar">
+      <table id="calendar-table"></table>
+    </div>
+  </div>
+  <br /><br />
+  <div class="controls" id="controls">
+    <button class="toggle-btn" onclick="toggleClock()">Switch to Digital</button>
+    <button class="toggle-btn" onclick="toggleFullscreen()">Fullscreen</button>
+  </div>
 
-    <button id="settings-cog" onclick="toggleSettings()">⚙️</button>
+  <script>
+    let isAnalog = true;
 
-    <div class="controls" id="controls">
-    <button class="toggle-btn" onclick="toggleClock()">Switch to Digital</button>
-    <button class="toggle-btn" onclick="toggleFullscreen()">Fullscreen</button>
-  </div>
+    // Update clock
+    function updateClock() {
+      const now = new Date();
+      const sec = now.getSeconds();
+      const min = now.getMinutes();
+      const hr = now.getHours();
 
+      if (isAnalog) {
+        const secDeg = sec * 6;
+        const minDeg = min * 6 + sec * 0.1;
+        const hrDeg = (hr % 12) * 30 + min * 0.5;
 
-  <script>
-    let isAnalog = true;
+        document.getElementById("seconds").style.transform =
+          `translate(-50%, -100%) rotate(${secDeg}deg)`;
+        document.getElementById("minutes").style.transform =
+          `translate(-50%, -100%) rotate(${minDeg}deg)`;
+        document.getElementById("hours").style.transform =
+          `translate(-50%, -100%) rotate(${hrDeg}deg)`;
+      } else {
+        const digital = document.getElementById("digital-time");
+        // Format time with seconds, consistent with analog movement
+        digital.textContent = now.toLocaleTimeString(); 
+      }
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
 
-    // --- NEW FUNCTION TO TOGGLE SETTINGS PANEL ---
-    function toggleSettings() {
-      const controls = document.getElementById("controls");
-      controls.classList.toggle("visible");
-    }
+    // Calendar
+    function generateCalendar() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
 
-    // Update clock
-    function updateClock() {
-      const now = new Date();
-      const sec = now.getSeconds();
-      const min = now.getMinutes();
-      const hr = now.getHours();
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-      if (isAnalog) {
-        const secDeg = sec * 6;
-        const minDeg = min * 6 + sec * 0.1;
-        const hrDeg = (hr % 12) * 30 + min * 0.5;
+      const table = document.getElementById("calendar-table");
+      table.innerHTML = "";
 
-        document.getElementById("seconds").style.transform =
-          `translate(-50%, -100%) rotate(${secDeg}deg)`;
-        document.getElementById("minutes").style.transform =
-          `translate(-50%, -100%) rotate(${minDeg}deg)`;
-        document.getElementById("hours").style.transform =
-          `translate(-50%, -100%) rotate(${hrDeg}deg)`;
-      } else {
-        const digital = document.getElementById("digital-time");
-        // Format time with seconds, consistent with analog movement
-        digital.textContent = now.toLocaleTimeString();
-      }
-    }
-    setInterval(updateClock, 1000);
-    updateClock();
+      const header = table.insertRow();
+      const headers = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      headers.forEach(d => {
+        const th = document.createElement("th");
+        th.textContent = d;
+        header.appendChild(th);
+      });
 
-    // Calendar
-    function generateCalendar() {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth();
+      let row = table.insertRow();
+      for (let i = 0; i < firstDay; i++) {
+        row.insertCell();
+      }
 
-      const firstDay = new Date(year, month, 1).getDay();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      for (let d = 1; d <= daysInMonth; d++) {
+        if (row.cells.length === 7) row = table.insertRow();
+        const cell = row.insertCell();
+        cell.textContent = d;
 
-      const table = document.getElementById("calendar-table");
-      table.innerHTML = "";
+        if (d === now.getDate()) {
+          cell.id = "current-day";
+        }
+      }
+    }
+    generateCalendar();
 
-      const header = table.insertRow();
-      const headers = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      headers.forEach(d => {
-        const th = document.createElement("th");
-        th.textContent = d;
-        header.appendChild(th);
-      });
+    // Toggle clock
+    function toggleClock() {
+      const clock = document.getElementById("clock");
+      const digital = document.getElementById("digital-time");
+      const btn = document.querySelectorAll(".toggle-btn")[0];
 
-      let row = table.insertRow();
-      for (let i = 0; i < firstDay; i++) {
-        row.insertCell();
-      }
+      isAnalog = !isAnalog;
 
-      for (let d = 1; d <= daysInMonth; d++) {
-        if (row.cells.length === 7) row = table.insertRow();
-        const cell = row.insertCell();
-        cell.textContent = d;
+      if (isAnalog) {
+        // Switch to Analog
+        clock.classList.remove("digital");
+        clock.classList.add("analog");
+        document.getElementById("hours").style.display = "block";
+        document.getElementById("minutes").style.display = "block";
+        document.getElementById("seconds").style.display = "block";
+        digital.style.display = "none";
+        btn.textContent = "Switch to Digital";
+      } else {
+        // Switch to Digital
+        clock.classList.remove("analog");
+        clock.classList.add("digital");
+        document.getElementById("hours").style.display = "none";
+        document.getElementById("minutes").style.display = "none";
+        document.getElementById("seconds").style.display = "none";
+        digital.style.display = "block";
+        btn.textContent = "Switch to Analog";
+      }
+      // Ensure the digital time is updated immediately upon switch
+      updateClock(); 
+    }
 
-        if (d === now.getDate()) {
-          cell.id = "current-day";
-        }
-      }
-    }
-    generateCalendar();
-
-    // Toggle clock
-    function toggleClock() {
-      const clock = document.getElementById("clock");
-      const digital = document.getElementById("digital-time");
-      const btn = document.querySelectorAll("#controls .toggle-btn")[0]; // Use a more specific selector
-
-      isAnalog = !isAnalog;
-
-      if (isAnalog) {
-        // Switch to Analog
-        clock.classList.remove("digital");
-        clock.classList.add("analog");
-        document.getElementById("hours").style.display = "block";
-        document.getElementById("minutes").style.display = "block";
-        document.getElementById("seconds").style.display = "block";
-        digital.style.display = "none";
-        btn.textContent = "Switch to Digital";
-      } else {
-        // Switch to Digital
-        clock.classList.remove("analog");
-        clock.classList.add("digital");
-        document.getElementById("hours").style.display = "none";
-        document.getElementById("minutes").style.display = "none";
-        document.getElementById("seconds").style.display = "none";
-        digital.style.display = "block";
-        btn.textContent = "Switch to Analog";
-      }
-      // Ensure the digital time is updated immediately upon switch
-      updateClock();
-    }
-
-    // Fullscreen toggle
-    function toggleFullscreen() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(err => {
-          alert(`Error attempting fullscreen: ${err.message}`);
-        });
-      } else {
-        document.exitFullscreen();
-      }
-    }
-
-    // --- REMOVED original scroll logic, as it's no longer needed with the cog wheel ---
-  </script>
+    // Fullscreen toggle
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          alert(`Error attempting fullscreen: ${err.message}`);
+        });
+      } else {
+        document.exitFullscreen();
+      }
+    }
+  </script>
 </body>
 </html>
