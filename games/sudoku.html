@@ -323,9 +323,9 @@
         let isGameActive = false;
         let timerInterval = null;
         let timeElapsed = 0;
-        let currentDifficulty = 'easy'; // Default to Easy
+        let currentDifficulty = 'easy';
 
-        // Default stats structure with separate lowest times
+        // Default stats structure
         const defaultStats = {
             easySolved: 0,
             mediumSolved: 0,
@@ -335,10 +335,9 @@
             bestHardTime: Infinity
         };
         
-        // Load stats from localStorage, using the new structure or migrating old one
         let stats = JSON.parse(localStorage.getItem('sudokuStats')) || defaultStats;
         
-        // Ensure new time properties exist on startup (for old saves)
+        // Ensure new time properties exist on startup
         stats.bestEasyTime = stats.bestEasyTime ?? defaultStats.bestEasyTime;
         stats.bestMediumTime = stats.bestMediumTime ?? defaultStats.bestMediumTime;
         stats.bestHardTime = stats.bestHardTime ?? defaultStats.bestHardTime;
@@ -357,30 +356,22 @@
 
         // --- CORE GAME LOGIC: SUDOKU GENERATION & SOLVING (Backtracking) ---
         
-        /**
-         * Checks if a number is safe to place at a given position.
-         */
+        /** Checks if a number is safe to place at a given position. */
         const isSafe = (board, r, c, num) => {
             for (let i = 0; i < GRID_SIZE; i++) {
-                if (board[r][i] === num || board[i][c] === num) {
-                    return false;
-                }
+                if (board[r][i] === num || board[i][c] === num) return false;
             }
             const startRow = r - (r % 3);
             const startCol = c - (c % 3);
             for (let i = 0; i < 3; i++) {
                 for (let j = 0; j < 3; j++) {
-                    if (board[startRow + i][startCol + j] === num) {
-                        return false;
-                    }
+                    if (board[startRow + i][startCol + j] === num) return false;
                 }
             }
             return true;
         };
 
-        /**
-         * Solves the board using recursive backtracking.
-         */
+        /** Solves the board using recursive backtracking. */
         const solveSudoku = (board) => {
             for (let r = 0; r < GRID_SIZE; r++) {
                 for (let c = 0; c < GRID_SIZE; c++) {
@@ -388,9 +379,7 @@
                         for (let num = 1; num <= 9; num++) {
                             if (isSafe(board, r, c, num)) {
                                 board[r][c] = num;
-                                if (solveSudoku(board)) {
-                                    return true;
-                                }
+                                if (solveSudoku(board)) return true;
                                 board[r][c] = EMPTY_CELL; // Backtrack
                             }
                         }
@@ -398,12 +387,10 @@
                     }
                 }
             }
-            return true; // Solved
+            return true;
         };
 
-        /**
-         * Generates a full, solved Sudoku grid.
-         */
+        /** Generates a full, solved Sudoku grid. */
         const generateFullSolution = () => {
             const board = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(EMPTY_CELL));
             const solve = (r, c) => {
@@ -434,56 +421,86 @@
         };
         
         /**
-         * Creates a playable puzzle by removing cells, ensuring one number per 3x3 block.
+         * Creates a playable puzzle by removing cells with enhanced clustering control.
          */
         const createPuzzle = (solution, difficulty) => {
+            const puzzle = solution.map(row => [...row]);
             let cellsToKeep;
+            let minPerBlock;
+            let maxPerBlock;
+
+            // Determine difficulty parameters
             switch (difficulty) {
-                case 'easy': cellsToKeep = 38; break; // Leaves ~38 pre-filled
-                case 'medium': cellsToKeep = 30; break; // Leaves ~30 pre-filled
-                case 'hard': cellsToKeep = 24; break; // Leaves ~24 pre-filled (Challenging)
-                default: cellsToKeep = 30;
+                case 'easy':
+                    cellsToKeep = 38; // ~38 pre-filled
+                    minPerBlock = 3;
+                    maxPerBlock = 5;
+                    break;
+                case 'medium':
+                    cellsToKeep = 30; // ~30 pre-filled
+                    minPerBlock = 2;
+                    maxPerBlock = 4;
+                    break;
+                case 'hard':
+                    cellsToKeep = 24; // ~24 pre-filled
+                    minPerBlock = 1; 
+                    maxPerBlock = 3;
+                    // Hard mode exception: 1/3 of blocks can start with 0 filled for extra challenge
+                    break;
+                default:
+                    cellsToKeep = 30;
+                    minPerBlock = 2;
+                    maxPerBlock = 4;
             }
 
-            const puzzle = solution.map(row => [...row]);
             let keptPositions = new Set();
-
-            // Enforce AT LEAST ONE number in each 3x3 block
-            for (let blockR = 0; blockR < 3; blockR++) {
-                for (let blockC = 0; blockC < 3; blockC++) {
-                    const blockPositions = [];
-                    for (let r = 0; r < 3; r++) {
-                        for (let c = 0; c < 3; c++) {
-                            const row = blockR * 3 + r;
-                            const col = blockC * 3 + c;
-                            blockPositions.push(row * GRID_SIZE + col);
-                        }
+            let blockFillCounts = Array(9).fill(0);
+            
+            // Phase 1: Enforce minimum fill and maximum cluster
+            for (let blockIndex = 0; blockIndex < 9; blockIndex++) {
+                const startR = Math.floor(blockIndex / 3) * 3;
+                const startC = (blockIndex % 3) * 3;
+                let blockPositions = [];
+                for (let r = startR; r < startR + 3; r++) {
+                    for (let c = startC; c < startC + 3; c++) {
+                        blockPositions.push(r * GRID_SIZE + c);
                     }
-                    
-                    const randomIndex = blockPositions[Math.floor(Math.random() * 9)];
-                    keptPositions.add(randomIndex);
+                }
+                
+                // Shuffle block positions for random selection
+                blockPositions.sort(() => Math.random() - 0.5);
+
+                const actualMin = (difficulty === 'hard' && Math.random() < 0.3) ? 0 : minPerBlock;
+                const toKeep = Math.min(maxPerBlock, actualMin + Math.floor(Math.random() * (maxPerBlock - actualMin + 1)));
+
+                for (let i = 0; i < toKeep; i++) {
+                    const index = blockPositions[i];
+                    keptPositions.add(index);
+                    blockFillCounts[blockIndex]++;
                 }
             }
 
-            // Remove numbers down to the target count
+            // Phase 2: Add random numbers until the target `cellsToKeep` is met (respecting maxPerBlock)
             const allPositions = Array.from({ length: TILE_COUNT }, (_, i) => i).sort(() => Math.random() - 0.5);
-
             let currentKeptCount = keptPositions.size;
-            
+
             for (const index of allPositions) {
+                if (currentKeptCount >= cellsToKeep) break;
                 if (keptPositions.has(index)) continue;
 
-                if (currentKeptCount < cellsToKeep) {
+                const r = Math.floor(index / GRID_SIZE);
+                const c = index % GRID_SIZE;
+                const blockIndex = Math.floor(r / 3) * 3 + Math.floor(c / 3);
+
+                // Only keep if it doesn't violate the max cluster limit
+                if (blockFillCounts[blockIndex] < maxPerBlock) {
                     keptPositions.add(index);
+                    blockFillCounts[blockIndex]++;
                     currentKeptCount++;
-                } else {
-                    const r = Math.floor(index / GRID_SIZE);
-                    const c = index % GRID_SIZE;
-                    puzzle[r][c] = EMPTY_CELL;
                 }
             }
             
-            // Final removal of numbers not in the kept set
+            // Phase 3: Remove all numbers not explicitly marked to be kept
             for (let i = 0; i < TILE_COUNT; i++) {
                 if (!keptPositions.has(i)) {
                     const r = Math.floor(i / GRID_SIZE);
@@ -518,9 +535,7 @@
 
         // --- UI RENDER FUNCTIONS ---
         
-        /**
-         * Creates the HTML structure for the 9x9 grid.
-         */
+        /** Creates the HTML structure for the 9x9 grid. */
         const createGridUI = () => {
             gridEl.innerHTML = '';
             for (let i = 0; i < TILE_COUNT; i++) {
@@ -532,9 +547,7 @@
             }
         };
 
-        /**
-         * Renders the current game state to the UI.
-         */
+        /** Renders the current game state to the UI. */
         const renderGrid = () => {
             const tiles = gridEl.querySelectorAll('.tile');
             for (let i = 0; i < TILE_COUNT; i++) {
@@ -573,9 +586,7 @@
             }
         };
         
-        /**
-         * Renders the mobile input panels. (Same as previous, omitted for brevity here)
-         */
+        /** Renders the mobile input panels. */
         const renderInputPanels = () => {
             const numbersPanel = document.querySelector('.numbers-panel');
             const notesPanel = document.querySelector('.notes-panel');
@@ -610,9 +621,7 @@
 
         // --- GAME FLOW & INITIALIZATION ---
         
-        /**
-         * Sets up a new game.
-         */
+        /** Sets up a new game. */
         const setupNewGame = () => {
             stopTimer();
             isGameActive = true;
@@ -754,9 +763,7 @@
             }
         };
 
-        /**
-         * Handles game win. Updates individual best times.
-         */
+        /** Handles game win. Updates individual best times. */
         const handleWin = () => {
             if (!isGameActive) return;
 
@@ -811,9 +818,7 @@
 
         // --- STATS AND UTILITY ---
         
-        /**
-         * Formats time (seconds) into MM:SS string.
-         */
+        /** Formats time (seconds) into MM:SS string. */
         const formatTime = (seconds) => {
             if (seconds === Infinity) return '--:--';
             const minutes = String(Math.floor(seconds / 60)).padStart(2, '0');
@@ -821,15 +826,12 @@
             return `${minutes}:${secs}`;
         };
 
-        /**
-         * Updates the personal best display.
-         */
+        /** Updates the personal best display. */
         const updateStatsDisplay = () => {
             document.getElementById('easy-count').textContent = stats.easySolved;
             document.getElementById('medium-count').textContent = stats.mediumSolved;
             document.getElementById('hard-count').textContent = stats.hardSolved;
             
-            // Update individual best times
             document.getElementById('best-easy-time').textContent = formatTime(stats.bestEasyTime);
             document.getElementById('best-medium-time').textContent = formatTime(stats.bestMediumTime);
             document.getElementById('best-hard-time').textContent = formatTime(stats.bestHardTime);
