@@ -21,10 +21,13 @@
         .container {
             text-align: center;
             background: #fff;
-            padding: 20px 0; /* Reduced horizontal padding */
+            /* FIX 1: Add horizontal padding to the container itself */
+            padding: 20px; 
             border-radius: 8px;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            max-width: 100%; /* Important for mobile layout */
+            /* Ensure the container is responsive and centered */
+            max-width: 900px; 
+            width: 95%; 
             margin: 0 auto;
         }
 
@@ -35,7 +38,8 @@
 
         .controls, .game-info, #message {
             margin-bottom: 20px;
-            padding: 0 20px; /* Add padding back to controls/info for separation */
+            /* FIX 2: Removed redundant horizontal padding here, relying on .container padding */
+            padding: 0; 
         }
 
         #difficulty, #newGameBtn {
@@ -57,27 +61,28 @@
             background-color: #45a049;
         }
 
-        /* --- New Wrapper for Horizontal Scrolling on Mobile --- */
+        /* --- Wrapper for Horizontal Scrolling on Mobile --- */
         .board-wrapper {
-            max-width: 100vw; /* Use full viewport width */
-            overflow-x: auto; /* Enable horizontal scrolling */
-            padding-bottom: 10px; /* Space for the scrollbar */
+            /* FIX 3: Set width to 100% of the parent container (which has padding) */
+            width: 100%; 
+            overflow-x: auto; 
+            padding-bottom: 10px; 
             box-sizing: border-box;
-            /* Ensure controls above and below are centered over the wrapper */
-            width: fit-content;
-            margin: 0 auto;
+            /* Ensure alignment */
+            margin: 0; 
         }
         
         /* Game Board Styling */
         #game-board {
-            display: grid; /* Use grid layout */
+            display: grid; 
             /* Classic 3D border effect */
             border: 3px solid #7b7b7b;
             border-right-color: #fff;
             border-bottom-color: #fff;
             background-color: #c0c0c0;
-            /* Prevent the grid from shrinking below its content size */
+            /* Ensures grid takes up necessary space for scrolling */
             width: fit-content; 
+            margin: 0 auto; /* Center the board inside the scrolling wrapper */
         }
 
         .cell {
@@ -167,7 +172,7 @@
             Time: <span id="timer">0</span>s
         </div>
 
-        <!-- NEW WRAPPER FOR SCROLLING -->
+        <!-- WRAPPER FOR SCROLLING -->
         <div class="board-wrapper">
             <div id="game-board">
                 <!-- Grid will be generated here by JavaScript -->
