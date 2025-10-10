@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Outtie Clock</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <!-- Tone.js for alarm sound generation -->
+    <script src="https://unpkg.com/tone@14.7.58/build/Tone.js"></script>
+    <style>
+        /* Custom scrollbar for lap list */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: var(--scrollbar-color);
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: var(--track-color);
+        }
+        .dark {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #2c2c54;
+            --text-primary: #e6e6fa;
+            --text-secondary: #a0a0c0;
+            --accent-color: #ff6b6b;
+            --scrollbar-color: #ff6b6b;
+            --track-color: #2c2c54;
+        }
+        .light {
+            --bg-primary: #f0f4f8;
+            --bg-secondary: #ffffff;
+            --text-primary: #333333;
+            --text-secondary: #555555;
+            --accent-color: #1a73e8;
+            --scrollbar-color: #1a73e8;
+            --track-color: #e0e0e0;
+        }
+        /* Initial colors set for dark mode by default */
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background-color 0.3s, color 0.3s;
+            font-family: 'Inter', sans-serif;
+        }
+        /* Mobile-friendly large font for main display */
+        #current-time {
+            font-size: 8vw; /* Fluid size for mobile */
+            letter-spacing: 2px;
+            font-weight: 700;
+        }
+        @media (min-width: 640px) {
+            #current-time {
+                font-size: 5rem; /* Larger for desktop */
+            }
+        }
+        /* Mobile Numpad Grid */
+        #timer-numpad .numpad-btn {
+            @apply w-full h-16 sm:h-20 text-2xl font-bold bg-opacity-10 hover:bg-opacity-20 transition duration-150 rounded-lg;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col p-4 transition-colors duration-300">
+
+    <!-- Global State & Configuration -->
+    <script>
+        // --- DATA AND STATE MANAGEMENT ---
+        let appState = {
+            theme: 'dark', // 'light' or 'dark'
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            is24Hour: false,
+            snoozeMinutes: 5,
+            activeTab: 'clock', // 'clock', 'alarms', 'timers', 'stopwatches'
+            alarms: [],
+            timers: [], // { id, name, totalSeconds, remainingSeconds, isRunning, startTime, intervalId }
+            stopwatches: [], // { id, name, elapsedSeconds, isRunning, laps, intervalId }
+            isAlarmPlaying: false,
+            alarmSound: 'synth', // Placeholder: using tone.js synth instead of an external mp3
+        };
+
+        const MAX_RETRIES = 5;
+        const INITIAL_BACKOFF = 1000;
+        const apiKey = "";
+        const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent";
+
+        // Tone.js Synth Setup
+        let synth = null;
+        function initSynth() {
+            if (synth === null) {
+                synth = new Tone.Synth().toDestination();
+                // A simple, piercing sound
+                synth.oscillator.type = "sawtooth";
+                synth.envelope.attack = 0.05;
+                synth.envelope.decay = 0.5;
+                synth.envelope.sustain = 0.1;
+                synth.envelope.release = 1;
+            }
+        }
+        initSynth();
+
+        // Alarm sound control
+        let alarmInterval = null;
+        function playAlarm() {
+            if (appState.isAlarmPlaying) return;
+            Tone.start();
+            appState.isAlarmPlaying = true;
+            console.log("Alarm sound playing.");
+            
+            // Play a sequence of notes
+            alarmInterval = setInterval(() => {
+                synth.triggerAttackRelease("C4", "8n");
+                synth.triggerAttackRelease("E4", "8n", "+0.2");
+                synth.triggerAttackRelease("G4", "8n", "+0.4");
+            }, 1000);
+        }
+
+        function stopAlarm() {
+            appState.isAlarmPlaying = false;
+            clearInterval(alarmInterval);
+            alarmInterval = null;
+        }
+
+        // --- LOCAL STORAGE PERSISTENCE ---
+
+        function loadState() {
+            const storedState = localStorage.getItem('outtieClockState');
+            if (storedState) {
+                const loaded = JSON.parse(storedState);
+                
+                // Merge loaded state, prioritizing existing structure for safety
+                appState.theme = loaded.theme || 'dark';
+                appState.timeZone = loaded.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+                appState.is24Hour = loaded.is24Hour || false;
+                appState.snoozeMinutes = loaded.snoozeMinutes || 5;
+                appState.alarms = loaded.alarms || [];
+                appState.timers = (loaded.timers || []).map(t => ({
+                    ...t,
+                    isRunning: false, // Reset running status on load
+                    intervalId: null
+                }));
+                appState.stopwatches = (loaded.stopwatches || []).map(s => ({
+                    ...s,
+                    isRunning: false, // Reset running status on load
+                    intervalId: null
+                }));
+                appState.alarmSound = loaded.alarmSound || 'synth';
+            }
+            applyTheme(appState.theme);
+        }
+
+        function saveState() {
+            // Only save storable parts of the state (excluding interval IDs)
+            const storableState = {
+                ...appState,
+                timers: appState.timers.map(t => ({...t, intervalId: null})),
+                stopwatches: appState.stopwatches.map(s => ({...s, intervalId: null})),
+            };
+            localStorage.setItem('outtieClockState', JSON.stringify(storableState));
+            console.log("State saved.");
+        }
+
+        // --- THEME MANAGEMENT ---
+
+        function applyTheme(theme) {
+            const body = document.body;
+            if (theme === 'dark') {
+                body.classList.remove('light');
+                body.classList.add('dark');
+                document.getElementById('settings-modal').classList.add('dark');
+            } else {
+                body.classList.remove('dark');
+                body.classList.add('light');
+                document.getElementById('settings-modal').classList.remove('dark');
+            }
+            appState.theme = theme;
+        }
+
+        // --- CLOCK CORE LOGIC ---
+
+        function updateClock() {
+            const now = new Date();
+            const options = {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: !appState.is24Hour,
+                timeZone: appState.timeZone
+            };
+
+            const timeString = now.toLocaleTimeString('en-US', options);
+            const timeDisplay = document.getElementById('current-time');
+            if (timeDisplay) {
+                timeDisplay.textContent = timeString;
+            }
+
+            // Check alarms every second
+            if (appState.activeTab !== 'stopwatches' && !appState.isAlarmPlaying) {
+                 checkAlarms(now);
+            }
+        }
+
+        // --- SETTINGS MODAL ---
+
+        function openSettings() {
+            document.getElementById('theme-toggle').checked = appState.theme === 'dark';
+            document.getElementById('24hr-toggle').checked = appState.is24Hour;
+            document.getElementById('snooze-input').value = appState.snoozeMinutes;
+            document.getElementById('timezone-select').value = appState.timeZone;
+            
+            document.getElementById('settings-modal').classList.remove('hidden');
+        }
+
+        function closeSettings() {
+            // Apply settings on close
+            appState.is24Hour = document.getElementById('24hr-toggle').checked;
+            appState.snoozeMinutes = parseInt(document.getElementById('snooze-input').value) || 5;
+            appState.timeZone = document.getElementById('timezone-select').value;
+            appState.theme = document.getElementById('theme-toggle').checked ? 'dark' : 'light';
+            
+            applyTheme(appState.theme);
+            saveState();
+            updateClock();
+
+            document.getElementById('settings-modal').classList.add('hidden');
+        }
+
+        function populateTimezones() {
+            const select = document.getElementById('timezone-select');
+            if (!select) return;
+
+            const zones = Intl.supportedValuesOf('timeZone').sort();
+            zones.forEach(zone => {
+                const option = document.createElement('option');
+                option.value = zone;
+                option.textContent = zone;
+                select.appendChild(option);
+            });
+        }
+
+        // --- TAB NAVIGATION ---
+
+        function switchTab(tabName) {
+            appState.activeTab = tabName;
+            
+            // Update buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-accent-color', 'text-white');
+                btn.classList.add('bg-bg-secondary', 'hover:opacity-70');
+            });
+
+            const activeBtn = document.getElementById(`tab-${tabName}`);
+            activeBtn.classList.remove('bg-bg-secondary', 'hover:opacity-70');
+            activeBtn.classList.add('bg-accent-color', 'text-white');
+
+            // Update content views
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            document.getElementById(`content-${tabName}`).classList.remove('hidden');
+
+            // Ensure rendering is updated
+            renderAlarms();
+            renderTimers();
+            renderStopwatches();
+        }
+
+        // --- ALARM LOGIC ---
+
+        function getDayOfWeek(dayIndex) {
+            return ['S', 'M', 'T', 'W', 'T', 'F', 'S'][dayIndex];
+        }
+        
+        function formatTime(time) {
+             let [h, m] = time.split(':').map(n => parseInt(n));
+             if (appState.is24Hour) {
+                return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+             }
+             const period = h >= 12 ? 'PM' : 'AM';
+             h = h % 12 || 12;
+             return `${h}:${String(m).padStart(2, '0')} ${period}`;
+        }
+
+        function renderAlarms() {
+            const list = document.getElementById('alarms-list');
+            if (!list) return;
+
+            list.innerHTML = '';
+            
+            if (appState.alarms.length === 0) {
+                list.innerHTML = `<p class="text-center text-text-secondary py-8">No alarms set. Click 'Add Alarm' to begin.</p>`;
+                return;
+            }
+
+            appState.alarms.sort((a, b) => a.time.localeCompare(b.time));
+
+            appState.alarms.forEach((alarm, index) => {
+                const daysText = alarm.days.length === 7 ? 'EVERYDAY' : alarm.days.join(', ');
+                const isChecked = alarm.enabled ? 'checked' : '';
+                
+                const item = document.createElement('div');
+                item.className = `flex items-center justify-between p-4 mb-2 rounded-lg ${alarm.enabled ? 'bg-bg-secondary' : 'bg-bg-secondary opacity-50'} shadow-lg`;
+                item.innerHTML = `
+                    <div>
+                        <div class="text-3xl font-mono">${formatTime(alarm.time)}</div>
+                        <div class="text-sm text-text-secondary mt-1">${alarm.name}</div>
+                        <div class="text-xs text-accent-color mt-1">${daysText}</div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" ${isChecked} onchange="toggleAlarm(${index})" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-500 rounded-full peer dark:peer-focus:ring-accent-color peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-accent-color"></div>
+                        </label>
+                        <button onclick="openAlarmEditor(${index})" class="text-text-secondary hover:text-accent-color">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+        
+        function toggleAlarm(index) {
+            appState.alarms[index].enabled = !appState.alarms[index].enabled;
+            saveState();
+            renderAlarms();
+        }
+
+        let currentAlarmIndex = -1; // -1 for new alarm
+        function openAlarmEditor(index = -1) {
+            currentAlarmIndex = index;
+            const modal = document.getElementById('alarm-editor-modal');
+            const title = document.getElementById('alarm-editor-title');
+            const alarm = index !== -1 ? appState.alarms[index] : { name: 'New Alarm', time: '07:00', days: [] };
+
+            title.textContent = index === -1 ? 'Add New Alarm' : 'Edit Alarm';
+            document.getElementById('alarm-name').value = alarm.name;
+            document.getElementById('alarm-time').value = alarm.time;
+            document.getElementById('delete-alarm-btn').classList.toggle('hidden', index === -1);
+
+            // Reset day selectors
+            document.querySelectorAll('.day-selector').forEach(btn => {
+                const day = btn.getAttribute('data-day');
+                btn.classList.remove('bg-accent-color', 'text-white');
+                if (alarm.days.includes(day)) {
+                    btn.classList.add('bg-accent-color', 'text-white');
+                }
+            });
+
+            modal.classList.remove('hidden');
+        }
+
+        function toggleDay(btn) {
+            const day = btn.getAttribute('data-day');
+            btn.classList.toggle('bg-accent-color');
+            btn.classList.toggle('text-white');
+        }
+
+        function saveAlarm() {
+            const name = document.getElementById('alarm-name').value.trim() || 'Untitled Alarm';
+            const time = document.getElementById('alarm-time').value;
+            
+            const selectedDays = [];
+            document.querySelectorAll('.day-selector').forEach(btn => {
+                if (btn.classList.contains('bg-accent-color')) {
+                    selectedDays.push(btn.getAttribute('data-day'));
+                }
+            });
+
+            if (!time) {
+                console.error("Time must be set.");
+                return;
+            }
+
+            const newAlarm = { 
+                id: currentAlarmIndex !== -1 ? appState.alarms[currentAlarmIndex].id : Date.now(), 
+                name, 
+                time, 
+                days: selectedDays, 
+                enabled: true 
+            };
+
+            if (currentAlarmIndex !== -1) {
+                // Edit existing alarm
+                appState.alarms[currentAlarmIndex] = newAlarm;
+            } else {
+                // Add new alarm
+                appState.alarms.push(newAlarm);
+            }
+            
+            closeAlarmEditor();
+            saveState();
+            renderAlarms();
+        }
+
+        function deleteAlarm() {
+            if (currentAlarmIndex !== -1) {
+                appState.alarms.splice(currentAlarmIndex, 1);
+            }
+            closeAlarmEditor();
+            saveState();
+            renderAlarms();
+        }
+
+        function closeAlarmEditor() {
+            document.getElementById('alarm-editor-modal').classList.add('hidden');
+            currentAlarmIndex = -1;
+        }
+
+        // Alarm Trigger Check
+        function checkAlarms(now) {
+            const currentHour = String(now.getHours()).padStart(2, '0');
+            const currentMinute = String(now.getMinutes()).padStart(2, '0');
+            const currentTime = `${currentHour}:${currentMinute}`;
+            const currentDayIndex = now.getDay(); // 0 (Sun) to 6 (Sat)
+            const currentDay = getDayOfWeek(currentDayIndex);
+            
+            const triggeredAlarms = appState.alarms.filter(alarm => {
+                if (!alarm.enabled) return false;
+                if (alarm.time !== currentTime) return false;
+                
+                // Check if it's the right day
+                return alarm.days.includes(currentDay);
+            });
+
+            if (triggeredAlarms.length > 0) {
+                // Prevent immediate re-trigger by disabling the first alarm that plays
+                if (triggeredAlarms[0].enabled) {
+                    triggeredAlarms[0].enabled = false; 
+                    saveState();
+                    renderAlarms(); // Rerender to show disabled state
+
+                    const names = triggeredAlarms.map(a => a.name).join(', ');
+                    showAlarmModal(names, 'alarm', triggeredAlarms[0].id, currentTime);
+                }
+            }
+        }
+        
+        // --- TIMER LOGIC ---
+
+        function formatSeconds(totalSeconds) {
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const s = totalSeconds % 60;
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+        
+        let currentTimerInput = { hours: 0, minutes: 0, seconds: 0, raw: 0 }; // Used for Numpad input
+
+        function resetTimerInput() {
+            currentTimerInput = { hours: 0, minutes: 0, seconds: 0, raw: 0 };
+            document.getElementById('timer-input-display').textContent = '00:00:00';
+            document.getElementById('new-timer-name').value = 'New Timer';
+        }
+
+        function updateTimerInputDisplay() {
+            const totalSeconds = currentTimerInput.raw;
+            let display = String(totalSeconds).padStart(6, '0');
+            
+            // Format H H M M S S
+            const h = display.substring(0, display.length - 4);
+            const m = display.substring(display.length - 4, display.length - 2);
+            const s = display.substring(display.length - 2);
+            
+            const hours = parseInt(h || '0');
+            const minutes = parseInt(m || '0');
+            const seconds = parseInt(s || '0');
+
+            currentTimerInput.hours = hours;
+            currentTimerInput.minutes = minutes;
+            currentTimerInput.seconds = seconds;
+            
+            const formattedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            document.getElementById('timer-input-display').textContent = formattedTime;
+        }
+
+        function numpadPress(digit) {
+            let currentRaw = String(currentTimerInput.raw || 0);
+            
+            if (digit === 'del') {
+                currentRaw = currentRaw.slice(0, -1);
+            } else if (currentRaw.length < 6) { // Max HH:MM:SS is 6 digits total
+                currentRaw += digit;
+            }
+
+            // Ensure leading zeros are removed when interpreting as a number
+            currentTimerInput.raw = parseInt(currentRaw || '0');
+
+            updateTimerInputDisplay();
+        }
+
+        function addTimer() {
+            const totalSeconds = (currentTimerInput.hours * 3600) + (currentTimerInput.minutes * 60) + currentTimerInput.seconds;
+            const name = document.getElementById('new-timer-name').value.trim() || 'Untitled Timer';
+
+            if (totalSeconds === 0) {
+                console.warn("Timer duration must be greater than zero.");
+                return;
+            }
+
+            const newTimer = {
+                id: Date.now(),
+                name: name,
+                totalSeconds: totalSeconds,
+                remainingSeconds: totalSeconds,
+                isRunning: false,
+                startTime: null,
+                intervalId: null
+            };
+
+            appState.timers.push(newTimer);
+            saveState();
+            renderTimers();
+            resetTimerInput(); // Clear input after adding
+        }
+
+        function startTimer(index) {
+            const timer = appState.timers[index];
+            if (timer.isRunning) return;
+
+            // If timer finished, restart it
+            if (timer.remainingSeconds <= 0) {
+                timer.remainingSeconds = timer.totalSeconds;
+            }
+
+            timer.isRunning = true;
+            timer.startTime = Date.now();
+            timer.intervalId = setInterval(() => tickTimer(index), 1000);
+            saveState();
+            renderTimers();
+        }
+
+        function tickTimer(index) {
+            const timer = appState.timers[index];
+            if (!timer || !timer.isRunning) {
+                clearInterval(timer.intervalId);
+                timer.intervalId = null;
+                return;
+            }
+
+            timer.remainingSeconds--;
+
+            if (timer.remainingSeconds <= 0) {
+                clearInterval(timer.intervalId);
+                timer.isRunning = false;
+                timer.intervalId = null;
+                timer.remainingSeconds = 0;
+                
+                showAlarmModal(timer.name, 'timer', timer.id);
+            }
+            renderTimers();
+        }
+
+        function pauseTimer(index) {
+            const timer = appState.timers[index];
+            if (!timer.isRunning) return;
+            
+            clearInterval(timer.intervalId);
+            timer.isRunning = false;
+            timer.intervalId = null;
+            saveState();
+            renderTimers();
+        }
+
+        function deleteTimer(id) {
+            const index = appState.timers.findIndex(t => t.id === id);
+            if (index !== -1) {
+                clearInterval(appState.timers[index].intervalId);
+                appState.timers.splice(index, 1);
+                saveState();
+                renderTimers();
+            }
+        }
+        
+        function renderTimers() {
+            const list = document.getElementById('timers-list');
+            if (!list) return;
+            
+            list.innerHTML = '';
+            
+            appState.timers.forEach((timer, index) => {
+                const isRunning = timer.isRunning;
+                const statusBtn = isRunning 
+                    ? `<button onclick="pauseTimer(${index})" class="text-white bg-red-600 p-2 rounded-full w-10 h-10 shadow-lg hover:bg-red-700 transition"><i class="fas fa-pause"></i></button>`
+                    : `<button onclick="startTimer(${index})" class="text-white bg-green-600 p-2 rounded-full w-10 h-10 shadow-lg hover:bg-green-700 transition"><i class="fas fa-play"></i></button>`;
+
+                const item = document.createElement('div');
+                item.className = `flex items-center justify-between p-4 mb-3 rounded-xl bg-bg-secondary shadow-xl`;
+                item.innerHTML = `
+                    <div class="flex-grow">
+                        <div class="text-4xl font-mono text-accent-color">${formatSeconds(timer.remainingSeconds)}</div>
+                        <div class="text-lg text-text-primary mt-1">${timer.name}</div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        ${statusBtn}
+                        <button onclick="deleteTimer(${timer.id})" class="text-text-secondary hover:text-red-500">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+        
+        // --- STOPWATCH LOGIC ---
+
+        // Stopwatch management is simplified: only one active stopwatch is displayed in the tab, 
+        // but multiple stopwatches can exist in the state array.
+
+        function getActiveStopwatch() {
+            if (appState.stopwatches.length === 0) {
+                appState.stopwatches.push({
+                    id: Date.now(),
+                    name: "Primary Stopwatch",
+                    elapsedSeconds: 0,
+                    isRunning: false,
+                    laps: [],
+                    intervalId: null
+                });
+                saveState();
+            }
+            return appState.stopwatches[0];
+        }
+
+        function startStopwatch() {
+            const sw = getActiveStopwatch();
+            if (sw.isRunning) return;
+
+            sw.isRunning = true;
+            sw.startTime = Date.now() - (sw.elapsedSeconds * 1000); // Account for time already elapsed
+            sw.intervalId = setInterval(tickStopwatch, 10); // Update frequently for smooth display
+            renderStopwatches();
+        }
+
+        function pauseStopwatch() {
+            const sw = getActiveStopwatch();
+            if (!sw.isRunning) return;
+
+            clearInterval(sw.intervalId);
+            sw.isRunning = false;
+            sw.intervalId = null;
+            saveState();
+            renderStopwatches();
+        }
+
+        function stopStopwatch() {
+            const sw = getActiveStopwatch();
+            pauseStopwatch();
+            sw.elapsedSeconds = 0;
+            sw.laps = [];
+            document.getElementById('stopwatch-name').value = "Primary Stopwatch";
+            saveState();
+            renderStopwatches();
+        }
+
+        function lapStopwatch() {
+            const sw = getActiveStopwatch();
+            const currentLapTime = formatSeconds(Math.floor(sw.elapsedSeconds));
+            sw.laps.push({
+                index: sw.laps.length + 1,
+                time: currentLapTime,
+                rawSeconds: sw.elapsedSeconds
+            });
+            renderStopwatches();
+        }
+
+        function tickStopwatch() {
+            const sw = getActiveStopwatch();
+            if (!sw.isRunning) return;
+
+            const timeDiff = Date.now() - sw.startTime;
+            sw.elapsedSeconds = timeDiff / 1000;
+            
+            // Only re-render the display, avoid saving state every tick
+            const display = document.getElementById('stopwatch-display');
+            if (display) {
+                const totalSeconds = sw.elapsedSeconds;
+                const h = Math.floor(totalSeconds / 3600);
+                const m = Math.floor((totalSeconds % 3600) / 60);
+                const s = Math.floor(totalSeconds % 60);
+                const ms = Math.floor((totalSeconds * 100) % 100);
+
+                display.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(2, '0')}`;
+            }
+            renderLaps();
+        }
+        
+        function updateStopwatchName(e) {
+            const sw = getActiveStopwatch();
+            sw.name = e.value;
+            saveState();
+        }
+
+        function renderLaps() {
+            const sw = getActiveStopwatch();
+            const lapList = document.getElementById('lap-list');
+            if (!lapList) return;
+
+            lapList.innerHTML = '';
+
+            sw.laps.slice().reverse().forEach(lap => {
+                const item = document.createElement('li');
+                item.className = 'flex justify-between items-center p-2 border-b border-text-secondary border-opacity-30';
+                item.innerHTML = `
+                    <span class="font-bold text-accent-color">Lap ${lap.index}</span>
+                    <span class="font-mono">${lap.time}</span>
+                `;
+                lapList.appendChild(item);
+            });
+        }
+
+        function renderStopwatches() {
+            const sw = getActiveStopwatch();
+            const isRunning = sw.isRunning;
+
+            // Update main display
+            const display = document.getElementById('stopwatch-display');
+            if (display) {
+                display.textContent = formatSeconds(Math.floor(sw.elapsedSeconds)) + '.00';
+            }
+            
+            document.getElementById('stopwatch-name').value = sw.name;
+
+            // Update buttons
+            document.getElementById('sw-start-btn').classList.toggle('hidden', isRunning);
+            document.getElementById('sw-pause-btn').classList.toggle('hidden', !isRunning);
+            document.getElementById('sw-lap-btn').disabled = !isRunning;
+            document.getElementById('sw-stop-btn').disabled = isRunning && sw.elapsedSeconds === 0;
+
+            renderLaps();
+        }
+
+        // --- GLOBAL MODAL (ALARM/TIMER POPUP) ---
+
+        let activeTriggerId = null;
+        let activeTriggerType = null;
+        
+        function showAlarmModal(nameList, type, id, time = '') {
+            playAlarm();
+            activeTriggerId = id;
+            activeTriggerType = type;
+
+            const title = type === 'alarm' ? 'ALARM TRIGGERED' : 'TIMER FINISHED';
+            const message = type === 'alarm' 
+                ? `Alarm(s) for ${time} are ringing: <b>${nameList}</b>`
+                : `Timer <b>${nameList}</b> has finished!`;
+
+            document.getElementById('trigger-modal-title').textContent = title;
+            document.getElementById('trigger-modal-message').innerHTML = message;
+            
+            const snoozeBtn = document.getElementById('snooze-trigger-btn');
+            snoozeBtn.classList.toggle('hidden', type === 'timer'); // Timers don't usually snooze
+            
+            document.getElementById('trigger-modal').classList.remove('hidden');
+        }
+
+        function handleSnooze() {
+            if (activeTriggerType === 'alarm') {
+                stopAlarm();
+                
+                // Find the index of the alarm that triggered the sound
+                const index = appState.alarms.findIndex(a => a.id === activeTriggerId);
+
+                if (index !== -1) {
+                    const alarm = appState.alarms[index];
+                    
+                    // Calculate snooze time
+                    const now = new Date();
+                    now.setMinutes(now.getMinutes() + appState.snoozeMinutes);
+                    
+                    const newHour = String(now.getHours()).padStart(2, '0');
+                    const newMinute = String(now.getMinutes()).padStart(2, '0');
+                    
+                    // Temporarily set the alarm time to the snoozed time, re-enabling it
+                    alarm.time = `${newHour}:${newMinute}`;
+                    alarm.enabled = true;
+                    saveState();
+                    renderAlarms();
+                    
+                    console.log(`Snoozed alarm ID ${activeTriggerId} to ${alarm.time}`);
+                }
+            }
+            handleOk();
+        }
+        
+        function handleOk() {
+            stopAlarm();
+            document.getElementById('trigger-modal').classList.add('hidden');
+            activeTriggerId = null;
+            activeTriggerType = null;
+            // For timers, after OK, we reset the timer (ready to restart)
+            if (activeTriggerType === 'timer') {
+                const timerIndex = appState.timers.findIndex(t => t.id === activeTriggerId);
+                if (timerIndex !== -1) {
+                    appState.timers[timerIndex].remainingSeconds = appState.timers[timerIndex].totalSeconds;
+                    saveState();
+                    renderTimers();
+                }
+            }
+        }
+
+        // --- INITIALIZATION ---
+
+        window.onload = function() {
+            loadState();
+            populateTimezones();
+            // Start the main clock loop
+            setInterval(updateClock, 1000);
+            updateClock();
+            
+            // Set initial tab based on loaded state (or default to 'clock')
+            switchTab(appState.activeTab); 
+            
+            // Setup timer numpad events (must happen after DOM load)
+            document.querySelectorAll('.numpad-btn').forEach(btn => {
+                const digit = btn.getAttribute('data-digit');
+                btn.addEventListener('click', () => numpadPress(digit));
+            });
+            resetTimerInput(); // Initialize numpad display
+        };
+
+    </script>
+
+    <!-- Header and Settings Cog -->
+    <header class="flex justify-between items-center mb-6">
+        <h1 class="text-xl font-bold text-accent-color">Outtie Clock</h1>
+        <button onclick="openSettings()" class="text-text-primary text-2xl hover:text-accent-color transition duration-200 p-2 rounded-full hover:bg-bg-secondary">
+            <i class="fas fa-cog"></i>
+        </button>
+    </header>
+
+    <!-- Main Clock Display -->
+    <main class="flex-grow flex flex-col items-center justify-center">
+        <div id="current-time" class="font-mono mb-8 text-center" style="color: var(--text-primary);">
+            --:--:--
+        </div>
+        
+        <!-- Tab Navigation -->
+        <nav class="flex space-x-2 md:space-x-4 p-2 rounded-xl bg-bg-secondary shadow-inner max-w-lg w-full justify-center">
+            <button id="tab-clock" onclick="switchTab('clock')" class="tab-btn flex-1 py-2 px-3 md:px-6 rounded-lg text-sm md:text-base font-semibold transition duration-200">
+                <i class="fas fa-clock mr-1"></i> Clock
+            </button>
+            <button id="tab-alarms" onclick="switchTab('alarms')" class="tab-btn flex-1 py-2 px-3 md:px-6 rounded-lg text-sm md:text-base font-semibold transition duration-200">
+                <i class="fas fa-bell mr-1"></i> Alarms
+            </button>
+            <button id="tab-timers" onclick="switchTab('timers')" class="tab-btn flex-1 py-2 px-3 md:px-6 rounded-lg text-sm md:text-base font-semibold transition duration-200">
+                <i class="fas fa-hourglass-half mr-1"></i> Timers
+            </button>
+            <button id="tab-stopwatches" onclick="switchTab('stopwatches')" class="tab-btn flex-1 py-2 px-3 md:px-6 rounded-lg text-sm md:text-base font-semibold transition duration-200">
+                <i class="fas fa-stopwatch mr-1"></i> Stopwatch
+            </button>
+        </nav>
+        
+        <!-- Content Area -->
+        <div class="mt-8 w-full max-w-2xl p-4 md:p-6 rounded-xl bg-bg-secondary shadow-2xl">
+            
+            <!-- Clock Tab Content (Empty, shows main time) -->
+            <div id="content-clock" class="tab-content">
+                <p class="text-center text-text-secondary mt-8">Your clock settings are managed in the <i class="fas fa-cog"></i> cogwheel menu.</p>
+                <div class="text-center mt-4 p-2 rounded-lg" style="color: var(--accent-color);">
+                    Timezone: <span id="current-timezone">${appState.timeZone}</span>
+                </div>
+            </div>
+            
+            <!-- Alarms Tab Content -->
+            <div id="content-alarms" class="tab-content hidden">
+                <h2 class="text-2xl font-semibold mb-4 text-accent-color">My Alarms</h2>
+                <div id="alarms-list" class="max-h-96 overflow-y-auto custom-scrollbar">
+                    <!-- Alarm items will be rendered here -->
+                </div>
+                <button onclick="openAlarmEditor()" class="w-full mt-6 py-3 bg-accent-color text-white rounded-lg font-bold hover:opacity-90 transition duration-150 shadow-md">
+                    <i class="fas fa-plus mr-2"></i> Add Alarm
+                </button>
+            </div>
+
+            <!-- Timers Tab Content -->
+            <div id="content-timers" class="tab-content hidden">
+                <h2 class="text-2xl font-semibold mb-4 text-accent-color">Set New Timer</h2>
+
+                <!-- Timer Input Display -->
+                <div id="timer-input-display" class="text-center text-5xl font-mono p-4 mb-6 rounded-lg bg-bg-primary shadow-inner mx-auto max-w-xs" style="color: var(--accent-color);">
+                    00:00:00
+                </div>
+                <input id="new-timer-name" type="text" placeholder="Timer Name" value="New Timer" class="w-full p-3 mb-6 rounded-lg bg-bg-primary text-text-primary focus:ring-2 focus:ring-accent-color transition" onchange="this.value = this.value.trim() || 'Untitled Timer'">
+
+                <!-- Numpad -->
+                <div id="timer-numpad" class="grid grid-cols-3 gap-2 text-text-primary" style="--bg-secondary: var(--bg-primary); --text-primary: var(--text-primary);">
+                    <button data-digit="1" class="numpad-btn" style="background-color: var(--text-primary);">1</button>
+                    <button data-digit="2" class="numpad-btn" style="background-color: var(--text-primary);">2</button>
+                    <button data-digit="3" class="numpad-btn" style="background-color: var(--text-primary);">3</button>
+                    <button data-digit="4" class="numpad-btn" style="background-color: var(--text-primary);">4</button>
+                    <button data-digit="5" class="numpad-btn" style="background-color: var(--text-primary);">5</button>
+                    <button data-digit="6" class="numpad-btn" style="background-color: var(--text-primary);">6</button>
+                    <button data-digit="7" class="numpad-btn" style="background-color: var(--text-primary);">7</button>
+                    <button data-digit="8" class="numpad-btn" style="background-color: var(--text-primary);">8</button>
+                    <button data-digit="9" class="numpad-btn" style="background-color: var(--text-primary);">9</button>
+                    
+                    <button onclick="addTimer()" class="numpad-btn bg-green-600 text-white hover:bg-green-700 transition" style="background-color: var(--accent-color) !important;">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button data-digit="0" class="numpad-btn" style="background-color: var(--text-primary);">0</button>
+                    <button data-digit="del" class="numpad-btn bg-red-600 text-white hover:bg-red-700 transition" style="background-color: var(--text-primary) !important;">
+                        <i class="fas fa-backspace"></i>
+                    </button>
+                </div>
+
+                <div class="mt-8">
+                    <h3 class="text-xl font-semibold mb-3 text-text-primary">Active Timers</h3>
+                    <div id="timers-list" class="max-h-60 overflow-y-auto custom-scrollbar">
+                        <!-- Timer items will be rendered here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stopwatch Tab Content -->
+            <div id="content-stopwatches" class="tab-content hidden text-center">
+                <input id="stopwatch-name" type="text" placeholder="Stopwatch Name" value="Primary Stopwatch" class="text-center text-lg font-semibold w-full p-2 mb-4 rounded-lg bg-bg-primary text-text-primary focus:ring-2 focus:ring-accent-color transition" onchange="updateStopwatchName(this)">
+                
+                <div id="stopwatch-display" class="font-mono text-6xl md:text-7xl p-6 mb-8 rounded-lg bg-bg-primary shadow-inner mx-auto" style="color: var(--accent-color);">
+                    00:00:00.00
+                </div>
+
+                <!-- Controls -->
+                <div class="flex justify-center space-x-4 mb-8">
+                    <button id="sw-stop-btn" onclick="stopStopwatch()" class="w-16 h-16 rounded-full bg-red-600 text-white text-xl shadow-xl hover:bg-red-700 transition disabled:opacity-50" disabled>
+                        <i class="fas fa-redo"></i>
+                    </button>
+                    
+                    <button id="sw-pause-btn" onclick="pauseStopwatch()" class="w-20 h-20 rounded-full bg-yellow-500 text-white text-2xl shadow-xl hover:bg-yellow-600 transition hidden">
+                        <i class="fas fa-pause"></i>
+                    </button>
+                    
+                    <button id="sw-start-btn" onclick="startStopwatch()" class="w-20 h-20 rounded-full bg-green-600 text-white text-2xl shadow-xl hover:bg-green-700 transition">
+                        <i class="fas fa-play"></i>
+                    </button>
+
+                    <button id="sw-lap-btn" onclick="lapStopwatch()" class="w-16 h-16 rounded-full bg-blue-500 text-white text-xl shadow-xl hover:bg-blue-600 transition disabled:opacity-50" disabled>
+                        <i class="fas fa-flag"></i>
+                    </button>
+                </div>
+
+                <!-- Lap List -->
+                <div class="mt-4">
+                    <h3 class="text-xl font-semibold mb-3 text-text-primary">Lap History</h3>
+                    <ul id="lap-list" class="max-h-60 overflow-y-auto custom-scrollbar text-text-secondary text-left p-2 rounded-lg bg-bg-primary">
+                        <!-- Laps rendered here -->
+                    </ul>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- --- SETTINGS MODAL --- -->
+    <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 hidden dark">
+        <div class="bg-bg-secondary p-8 rounded-2xl w-full max-w-md shadow-2xl" style="background-color: var(--bg-secondary); color: var(--text-primary);">
+            <h2 class="text-2xl font-bold mb-6 text-accent-color">Clock Settings</h2>
+
+            <div class="space-y-4">
+                
+                <!-- Theme Selector -->
+                <div class="flex justify-between items-center p-3 rounded-lg bg-bg-primary">
+                    <span>Dark/Light Theme</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input id="theme-toggle" type="checkbox" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-500 rounded-full peer dark:peer-focus:ring-accent-color peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-accent-color"></div>
+                    </label>
+                </div>
+
+                <!-- Time Format -->
+                <div class="flex justify-between items-center p-3 rounded-lg bg-bg-primary">
+                    <span>24-Hour Format (HH:MM)</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input id="24hr-toggle" type="checkbox" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-500 rounded-full peer dark:peer-focus:ring-accent-color peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-accent-color"></div>
+                    </label>
+                </div>
+
+                <!-- Timezone Selector -->
+                <div class="p-3 rounded-lg bg-bg-primary">
+                    <label for="timezone-select" class="block mb-2">Timezone Selection</label>
+                    <select id="timezone-select" class="w-full p-2 rounded-md bg-bg-secondary border border-text-secondary border-opacity-30">
+                        <!-- Timezones populated by JS -->
+                    </select>
+                </div>
+
+                <!-- Snooze Time -->
+                <div class="p-3 rounded-lg bg-bg-primary">
+                    <label for="snooze-input" class="block mb-2">Snooze Duration (minutes)</label>
+                    <input id="snooze-input" type="number" min="1" max="60" value="5" class="w-full p-2 rounded-md bg-bg-secondary border border-text-secondary border-opacity-30">
+                </div>
+                
+                <!-- Default Alarm Sound -->
+                <div class="p-3 rounded-lg bg-bg-primary">
+                    <label class="block mb-2">Default Alarm Sound (Currently: Synth)</label>
+                    <p class="text-sm text-text-secondary">Using Tone.js synthesizer instead of "default alarm sound.mp3" due to embedding restrictions.</p>
+                </div>
+
+            </div>
+
+            <button onclick="closeSettings()" class="w-full mt-6 py-3 bg-accent-color text-white rounded-lg font-bold hover:opacity-90 transition duration-150 shadow-lg">
+                Save & Close
+            </button>
+        </div>
+    </div>
+    
+    <!-- --- ALARM EDITOR MODAL --- -->
+    <div id="alarm-editor-modal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 hidden">
+        <div class="bg-bg-secondary p-8 rounded-2xl w-full max-w-md shadow-2xl" style="background-color: var(--bg-secondary); color: var(--text-primary);">
+            <h2 id="alarm-editor-title" class="text-2xl font-bold mb-6 text-accent-color">Add New Alarm</h2>
+
+            <div class="space-y-4">
+                
+                <!-- Alarm Name -->
+                <div>
+                    <label for="alarm-name" class="block mb-2">Alarm Name</label>
+                    <input id="alarm-name" type="text" value="New Alarm" class="w-full p-3 rounded-lg bg-bg-primary text-text-primary focus:ring-2 focus:ring-accent-color transition">
+                </div>
+
+                <!-- Alarm Time -->
+                <div>
+                    <label for="alarm-time" class="block mb-2">Time (HH:MM)</label>
+                    <input id="alarm-time" type="time" value="07:00" class="w-full p-3 text-2xl rounded-lg bg-bg-primary text-text-primary focus:ring-2 focus:ring-accent-color transition">
+                </div>
+                
+                <!-- Day Selectors -->
+                <div class="mt-4">
+                    <label class="block mb-2">Repeat</label>
+                    <div class="flex justify-between text-xs sm:text-sm font-semibold">
+                        <button class="day-selector w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-bg-primary hover:opacity-70 transition" data-day="S" onclick="toggleDay(this)">S</button>
+                        <button class="day-selector w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-bg-primary hover:opacity-70 transition" data-day="M" onclick="toggleDay(this)">M</button>
+                        <button class="day-selector w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-bg-primary hover:opacity-70 transition" data-day="T" onclick="toggleDay(this)">T</button>
+                        <button class="day-selector w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-bg-primary hover:opacity-70 transition" data-day="W" onclick="toggleDay(this)">W</button>
+                        <button class="day-selector w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-bg-primary hover:opacity-70 transition" data-day="T" onclick="toggleDay(this)">T</button>
+                        <button class="day-selector w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-bg-primary hover:opacity-70 transition" data-day="F" onclick="toggleDay(this)">F</button>
+                        <button class="day-selector w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-bg-primary hover:opacity-70 transition" data-day="S" onclick="toggleDay(this)">S</button>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="flex justify-between mt-6 space-x-4">
+                <button id="delete-alarm-btn" onclick="deleteAlarm()" class="flex-1 py-3 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition duration-150 shadow-lg hidden">
+                    Delete
+                </button>
+                <button onclick="saveAlarm()" class="flex-1 py-3 bg-accent-color text-white rounded-lg font-bold hover:opacity-90 transition duration-150 shadow-lg">
+                    Save
+                </button>
+                <button onclick="closeAlarmEditor()" class="flex-1 py-3 bg-gray-500 text-white rounded-lg font-bold hover:bg-gray-600 transition duration-150 shadow-lg">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- --- ALARM/TIMER TRIGGER MODAL --- -->
+    <div id="trigger-modal" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 hidden">
+        <div class="bg-bg-secondary p-8 rounded-2xl w-full max-w-sm text-center shadow-2xl border-4 border-accent-color animate-pulse" style="background-color: var(--bg-secondary); color: var(--text-primary);">
+            <i class="fas fa-exclamation-triangle text-6xl mb-4" style="color: var(--accent-color);"></i>
+            <h2 id="trigger-modal-title" class="text-3xl font-bold mb-4" style="color: var(--accent-color);">ALARM TRIGGERED</h2>
+            <p id="trigger-modal-message" class="text-lg mb-6">Alarm ringing!</p>
+
+            <div class="flex justify-center space-x-4">
+                <button id="snooze-trigger-btn" onclick="handleSnooze()" class="flex-1 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition duration-150 shadow-lg">
+                    Snooze (${appState.snoozeMinutes} min)
+                </button>
+                <button onclick="handleOk()" class="flex-1 py-3 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition duration-150 shadow-lg">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

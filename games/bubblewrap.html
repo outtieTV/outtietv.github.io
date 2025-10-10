@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bubble Wrap Popper</title>
+<style>
+body {
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #f0f0f0;
+    margin: 20px;
+}
+
+h1 {
+    color: #333;
+}
+
+#grid-container {
+    display: grid;
+    /* Create the 5x5 grid */
+    grid-template-columns: repeat(5, 1fr); 
+    grid-template-rows: repeat(5, 1fr);
+    gap: 5px;
+    width: min(90vw, 400px); /* Max width for better look */
+    height: min(90vw, 400px);
+    padding: 10px;
+    border: 3px solid #ccc;
+    background-color: #fff;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.bubble {
+    background-color: #b0e0e6; /* Light Blue */
+    border-radius: 50%; /* Make it circular */
+    border: 2px solid #87ceeb; /* Sky Blue border */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.1s, transform 0.1s;
+    box-shadow: inset 0 0 5px rgba(255, 255, 255, 0.7); /* Shiny effect */
+}
+
+/* State when a bubble is popped */
+.popped {
+    background-color: #ddd; /* Grayed out */
+    border: 2px solid #aaa;
+    transform: scale(0.9); /* Slight shrink */
+    cursor: default;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2); /* Sunken effect */
+    pointer-events: none; /* Make it unclickable */
+}
+
+.popped::after {
+    content: 'P'; /* Simple indicator for popped */
+    color: #a0a0a0;
+    font-weight: bold;
+}
+
+#score-container {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 1.2rem;
+}
+
+#message {
+    color: green;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+#reset-button {
+    padding: 10px 20px;
+    font-size: 1.1rem;
+    background-color: #4CAF50; /* Green */
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 15px;
+}
+
+#reset-button:hover {
+    background-color: #45a049;
+}
+</style>
+</head>
+
+<body>
+    <h1>Bubble Wrap Popper 💥</h1>
+    <div id="grid-container">
+        </div>
+    <div id="score-container">
+        <p>Bubbles Popped: <span id="score">0</span> / 25</p>
+        <p id="message"></p>
+        <button id="reset-button" style="display: none;">Play Again</button>
+    </div>
+
+    <script>
+	document.addEventListener('DOMContentLoaded', () => {
+    const GRID_SIZE = 5;
+    const TOTAL_BUBBLES = GRID_SIZE * GRID_SIZE;
+    let score = 0;
+
+    const gridContainer = document.getElementById('grid-container');
+    const scoreElement = document.getElementById('score');
+    const messageElement = document.getElementById('message');
+    const resetButton = document.getElementById('reset-button');
+
+    // --- Game Logic ---
+
+    function generateGrid() {
+        gridContainer.innerHTML = ''; // Clear existing bubbles
+        score = 0;
+        scoreElement.textContent = score;
+        messageElement.textContent = '';
+        resetButton.style.display = 'none';
+
+        for (let i = 0; i < TOTAL_BUBBLES; i++) {
+            const bubble = document.createElement('div');
+            bubble.classList.add('bubble');
+            bubble.dataset.index = i; // Store its index
+            bubble.addEventListener('click', popBubble);
+            gridContainer.appendChild(bubble);
+        }
+    }
+
+    function popBubble(event) {
+        const bubble = event.currentTarget;
+
+        // Ensure the bubble hasn't been popped already
+        if (bubble.classList.contains('popped')) {
+            return;
+        }
+
+        // 1. Pop the bubble
+        bubble.classList.add('popped');
+
+        // 2. Update the score
+        score++;
+        scoreElement.textContent = score;
+
+        // 3. Simple sound effect (optional, relies on modern browsers)
+        // You can replace this with a proper Audio element for better compatibility
+        if (typeof AudioContext !== 'undefined') {
+            const context = new AudioContext();
+            const osc = context.createOscillator();
+            const gain = context.createGain();
+
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(500, context.currentTime); // Pitch
+            gain.gain.setValueAtTime(0.5, context.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.1); // Quick fade
+
+            osc.connect(gain);
+            gain.connect(context.destination);
+
+            osc.start();
+            osc.stop(context.currentTime + 0.1);
+        }
+
+        // 4. Check for win condition
+        if (score === TOTAL_BUBBLES) {
+            endGame();
+        }
+    }
+
+    function endGame() {
+        messageElement.textContent = "🎉 Congratulations! You popped all the bubbles! 🎉";
+        resetButton.style.display = 'block';
+    }
+
+    // --- Event Listeners ---
+    resetButton.addEventListener('click', generateGrid);
+
+    // --- Initialize Game ---
+    generateGrid();
+});
+	</script>
+</body>
+</html>
