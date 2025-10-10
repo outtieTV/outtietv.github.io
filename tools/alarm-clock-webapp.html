@@ -37,7 +37,7 @@
 			--bg-secondary: #ffffff; /* White for panels/modals */
 			--text-primary: #1a1a1a; /* Very dark gray for contrast */
 			--text-secondary: #4a4a4a; /* Readable mid-gray */
-			--accent-color: #1a73e8; /* Google-blue style accent */
+			--accent-color: #1662c4; /* Google-blue style accent */
 			--scrollbar-color: #1a73e8;
 			--track-color: #d3d9e0;
 		}
@@ -64,6 +64,26 @@
         #timer-numpad .numpad-btn {
             @apply w-full h-16 sm:h-20 text-2xl font-bold bg-opacity-10 hover:bg-opacity-20 transition duration-150 rounded-lg;
         }
+		/* === Improved Save & Close Button === */
+		#settings-modal button.bg-accent-color {
+			background-color: var(--accent-color);
+			color: #fff !important;
+			font-weight: 700;
+			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+			border: 2px solid rgba(255, 255, 255, 0.2);
+			transition: all 0.2s ease-in-out;
+		}
+
+		#settings-modal button.bg-accent-color:hover {
+			filter: brightness(1.15);
+			transform: translateY(-1px);
+			box-shadow: 0 0 10px var(--accent-color);
+		}
+
+		#settings-modal button.bg-accent-color:active {
+			transform: translateY(0);
+			box-shadow: 0 0 6px var(--accent-color);
+		}
     </style>
 </head>
 <body class="min-h-screen flex flex-col p-4 transition-colors duration-300">
