@@ -22,24 +22,26 @@
         .custom-scrollbar::-webkit-scrollbar-track {
             background: var(--track-color);
         }
-        .dark {
-            --bg-primary: #1a1a2e;
-            --bg-secondary: #2c2c54;
-            --text-primary: #e6e6fa;
-            --text-secondary: #a0a0c0;
-            --accent-color: #ff6b6b;
-            --scrollbar-color: #ff6b6b;
-            --track-color: #2c2c54;
-        }
-        .light {
-            --bg-primary: #f0f4f8;
-            --bg-secondary: #ffffff;
-            --text-primary: #333333;
-            --text-secondary: #555555;
-            --accent-color: #1a73e8;
-            --scrollbar-color: #1a73e8;
-            --track-color: #e0e0e0;
-        }
+		.dark {
+			--bg-primary: #12121c; /* Darker, deep navy background */
+			--bg-secondary: #1f1f33; /* Slightly lighter for cards/modals */
+			--text-primary: #f5f6fa; /* Bright, clean white text */
+			--text-secondary: #c3c5d3; /* Muted but readable gray-blue */
+			--accent-color: #ff6b6b; /* Vibrant coral-red accent */
+			--scrollbar-color: #ff6b6b;
+			--track-color: #1f1f33;
+		}
+
+		.light {
+			--bg-primary: #eaf0f6; /* Softer blue-gray for body background */
+			--bg-secondary: #ffffff; /* White for panels/modals */
+			--text-primary: #1a1a1a; /* Very dark gray for contrast */
+			--text-secondary: #4a4a4a; /* Readable mid-gray */
+			--accent-color: #1a73e8; /* Google-blue style accent */
+			--scrollbar-color: #1a73e8;
+			--track-color: #d3d9e0;
+		}
+
         /* Initial colors set for dark mode by default */
         body {
             background-color: var(--bg-primary);
@@ -224,6 +226,7 @@
             applyTheme(appState.theme);
             saveState();
             updateClock();
+			document.getElementById('current-timezone').textContent = appState.timeZone;
 
             document.getElementById('settings-modal').classList.add('hidden');
         }
@@ -820,6 +823,7 @@
                 btn.addEventListener('click', () => numpadPress(digit));
             });
             resetTimerInput(); // Initialize numpad display
+			document.getElementById('current-timezone').textContent = appState.timeZone;
         };
 
     </script>
@@ -861,7 +865,7 @@
             <div id="content-clock" class="tab-content">
                 <p class="text-center text-text-secondary mt-8">Your clock settings are managed in the <i class="fas fa-cog"></i> cogwheel menu.</p>
                 <div class="text-center mt-4 p-2 rounded-lg" style="color: var(--accent-color);">
-                    Timezone: <span id="current-timezone">${appState.timeZone}</span>
+                    Timezone: <span id="current-timezone"></span>
                 </div>
             </div>
             
