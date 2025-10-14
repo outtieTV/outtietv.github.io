@@ -8,79 +8,147 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <script src="https://unpkg.com/tone@14.7.58/build/Tone.js"></script>
     <style>
-        /* Custom scrollbar for lap list */
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background-color: var(--scrollbar-color);
-            border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: var(--track-color);
-        }
-		.dark {
-			--bg-primary: #12121c; /* Darker, deep navy background */
-			--bg-secondary: #1f1f33; /* Slightly lighter for cards/modals */
-			--text-primary: #f5f6fa; /* Bright, clean white text */
-			--text-secondary: #c3c5d3; /* Muted but readable gray-blue */
-			--accent-color: #ff6b6b; /* Vibrant coral-red accent */
-			--scrollbar-color: #ff6b6b;
-			--track-color: #1f1f33;
-		}
+/* Custom scrollbar for lap list */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-color);
+    border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: var(--track-color);
+}
 
-		.light {
-			--bg-primary: #eaf0f6; /* Softer blue-gray for body background */
-			--bg-secondary: #ffffff; /* White for panels/modals */
-			--text-primary: #1a1a1a; /* Very dark gray for contrast */
-			--text-secondary: #4a4a4a; /* Readable mid-gray */
-			--accent-color: #1662c4; /* Google-blue style accent */
-			--scrollbar-color: #1a73e8;
-			--track-color: #d3d9e0;
-		}
+/* === Theme Definitions === */
+.dark {
+    --bg-primary: #12121c; /* Darker, deep navy background */
+    --bg-secondary: #1f1f33; /* Slightly lighter for cards/modals */
+    --text-primary: #f5f6fa; /* Bright, clean white text */
+    --text-secondary: #c3c5d3; /* Muted but readable gray-blue */
+    --accent-color: #ff6b6b; /* Vibrant coral-red accent (Dark enough for white text) */
+    --scrollbar-color: #ff6b6b;
+    --track-color: #1f1f33;
+}
 
-        /* Initial colors set for dark mode by default */
-        body {
-            background-color: var(--bg-primary);
-            color: var(--text-primary);
-            transition: background-color 0.3s, color 0.3s;
-            font-family: 'Inter', sans-serif;
-        }
-        /* Mobile-friendly large font for main display */
-        #current-time {
-            font-size: 8vw; /* Fluid size for mobile */
-            letter-spacing: 2px;
-            font-weight: 700;
-        }
-        @media (min-width: 640px) {
-            #current-time {
-                font-size: 5rem; /* Larger for desktop */
-            }
-        }
-        /* Mobile Numpad Grid */
-        #timer-numpad .numpad-btn {
-            @apply w-full h-16 sm:h-20 text-2xl font-bold bg-opacity-10 hover:bg-opacity-20 transition duration-150 rounded-lg;
-        }
-		/* === Improved Save & Close Button === */
-		#settings-modal button.bg-accent-color {
-			background-color: var(--accent-color);
-			color: #fff !important;
-			font-weight: 700;
-			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-			border: 2px solid rgba(255, 255, 255, 0.2);
-			transition: all 0.2s ease-in-out;
-		}
+.light {
+    --bg-primary: #eaf0f6; /* Softer blue-gray for body background */
+    --bg-secondary: #ffffff; /* White for panels/modals */
+    --text-primary: #1a1a1a; /* Very dark gray for contrast */
+    --text-secondary: #4a4a4a; /* Readable mid-gray */
+    --accent-color: #1662c4; /* Google-blue style accent (Dark enough for white text) */
+    --scrollbar-color: #1a73e8;
+    --track-color: #d3d9e0;
+}
 
-		#settings-modal button.bg-accent-color:hover {
-			filter: brightness(1.15);
-			transform: translateY(-1px);
-			box-shadow: 0 0 10px var(--accent-color);
-		}
+/* === Global Body Styling === */
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background-color 0.3s, color 0.3s;
+    font-family: 'Inter', sans-serif;
+}
 
-		#settings-modal button.bg-accent-color:active {
-			transform: translateY(0);
-			box-shadow: 0 0 6px var(--accent-color);
-		}
+/* Mobile-friendly large font for main display */
+#current-time {
+    font-size: 8vw; /* Fluid size for mobile */
+    letter-spacing: 2px;
+    font-weight: 700;
+}
+@media (min-width: 640px) {
+    #current-time {
+        font-size: 5rem; /* Larger for desktop */
+    }
+}
+
+/* Mobile Numpad Grid */
+#timer-numpad .numpad-btn {
+    /* Assuming these are Tailwind classes being applied via a build process, they are kept */
+    @apply w-full h-16 sm:h-20 text-2xl font-bold bg-opacity-10 hover:bg-opacity-20 transition duration-150 rounded-lg;
+}
+
+/* === FIX 1: Explicitly map the HTML class 'bg-accent-color' to the CSS variable === */
+/* This ensures the Add Alarm button and others using this class get the themed color */
+.bg-accent-color {
+    background-color: var(--accent-color) !important; 
+    /* Force the background to be the accent color */
+    color: #fff !important; 
+    /* Force the text to be white for contrast on the dark accent color */
+}
+
+/* === FIX 2: General Form/Input Readability Fixes (Dropdowns, Text Fields) === */
+input[type="text"],
+input[type="number"],
+textarea,
+select {
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--text-secondary); 
+    padding: 0.5em;
+    border-radius: 4px;
+    -webkit-appearance: none; 
+    -moz-appearance: none;
+    appearance: none; 
+}
+
+select option {
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+}
+
+/* Override input/select color/background specifically for dark mode */
+.dark input, .dark select, .dark textarea {
+    color: var(--text-primary); 
+    background-color: var(--bg-secondary);
+    border-color: var(--text-secondary);
+}
+
+/* Override input/select color/background specifically for light mode */
+.light input, .light select, .light textarea {
+    color: var(--text-primary); 
+    background-color: var(--bg-secondary);
+    border-color: var(--text-secondary);
+}
+
+
+/* === FIX 3: General Button Readability Fixes (for buttons NOT using accent color) === */
+button:not(.bg-accent-color, #settings-modal button.bg-accent-color) { 
+    background-color: var(--bg-secondary); 
+    color: var(--text-primary); 
+    padding: 0.5em 1em;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s, border 0.2s;
+    font-weight: 600;
+}
+
+/* Enhance generic button look in light mode for better definition */
+.light button:not(.bg-accent-color, #settings-modal button.bg-accent-color) {
+    border: 1px solid var(--text-secondary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* === Improved Save & Close Button (Original Styles) === */
+/* This specific selector is kept separate for the complex hover/active effects */
+#settings-modal button.bg-accent-color {
+    /* Background and color are now handled by the global .bg-accent-color rule above */
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.2s ease-in-out;
+}
+
+#settings-modal button.bg-accent-color:hover {
+    filter: brightness(1.15);
+    transform: translateY(-1px);
+    box-shadow: 0 0 10px var(--accent-color);
+}
+
+#settings-modal button.bg-accent-color:active {
+    transform: translateY(0);
+    box-shadow: 0 0 6px var(--accent-color);
+}
     </style>
 </head>
 <body class="min-h-screen flex flex-col p-4 transition-colors duration-300">
