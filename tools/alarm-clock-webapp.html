@@ -4,11 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Outtie Clock</title>
-    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <!-- Tone.js for alarm sound generation -->
     <script src="https://unpkg.com/tone@14.7.58/build/Tone.js"></script>
     <style>
         /* Custom scrollbar for lap list */
@@ -88,7 +85,6 @@
 </head>
 <body class="min-h-screen flex flex-col p-4 transition-colors duration-300">
 
-    <!-- Global State & Configuration -->
     <script>
         // --- DATA AND STATE MANAGEMENT ---
         let appState = {
@@ -97,10 +93,11 @@
             is24Hour: false,
             snoozeMinutes: 5,
             activeTab: 'clock', // 'clock', 'alarms', 'timers', 'stopwatches'
-            alarms: [],
+            alarms: [], // alarms: [{ ..., soundUrl: 'optional_url' }]
             timers: [], // { id, name, totalSeconds, remainingSeconds, isRunning, startTime, intervalId }
             stopwatches: [], // { id, name, elapsedSeconds, isRunning, laps, intervalId }
             isAlarmPlaying: false,
+            globalAlarmSoundUrl: '', // NEW: Global URL for alarm sound
             alarmSound: 'synth', // Placeholder: using tone.js synth instead of an external mp3
         };
 
@@ -111,6 +108,7 @@
 
         // Tone.js Synth Setup
         let synth = null;
+        let alarmPlayer = null; // NEW: Tone.Player for URL sounds
         function initSynth() {
             if (synth === null) {
                 synth = new Tone.Synth().toDestination();
@@ -121,29 +119,62 @@
                 synth.envelope.sustain = 0.1;
                 synth.envelope.release = 1;
             }
+            // Initialize player but don't load a URL yet
+            if (alarmPlayer === null) {
+                alarmPlayer = new Tone.Player({
+                    url: "", // Will be loaded dynamically
+                    loop: true,
+                }).toDestination();
+                alarmPlayer.volume.value = -10; // Slightly quieter for safety
+            }
         }
         initSynth();
 
         // Alarm sound control
         let alarmInterval = null;
-        function playAlarm() {
+        function playAlarm(soundUrl) { // soundUrl is the URL for the specific alarm or global
             if (appState.isAlarmPlaying) return;
             Tone.start();
             appState.isAlarmPlaying = true;
             console.log("Alarm sound playing.");
             
-            // Play a sequence of notes
-            alarmInterval = setInterval(() => {
-                synth.triggerAttackRelease("C4", "8n");
-                synth.triggerAttackRelease("E4", "8n", "+0.2");
-                synth.triggerAttackRelease("G4", "8n", "+0.4");
-            }, 1000);
+            const finalUrl = soundUrl || appState.globalAlarmSoundUrl;
+
+            if (finalUrl) {
+                // Use Tone.Player for URL sound
+                alarmPlayer.load(finalUrl).then(() => {
+                    // Ensure it's not already playing from a previous trigger
+                    if (appState.isAlarmPlaying) { 
+                        alarmPlayer.start(0);
+                    }
+                }).catch(e => {
+                    console.error("Failed to load alarm sound from URL:", finalUrl, e);
+                    // Fallback to synth if URL fails
+                    fallbackToSynth();
+                });
+                
+            } else {
+                // Fallback to synth if no URL is set
+                fallbackToSynth();
+            }
+            
+            function fallbackToSynth() {
+                // Play a sequence of notes
+                alarmInterval = setInterval(() => {
+                    synth.triggerAttackRelease("C4", "8n");
+                    synth.triggerAttackRelease("E4", "8n", "+0.2");
+                    synth.triggerAttackRelease("G4", "8n", "+0.4");
+                }, 1000);
+            }
         }
 
         function stopAlarm() {
             appState.isAlarmPlaying = false;
             clearInterval(alarmInterval);
             alarmInterval = null;
+            if (alarmPlayer && alarmPlayer.state === 'started') {
+                alarmPlayer.stop();
+            }
         }
 
         // --- LOCAL STORAGE PERSISTENCE ---
@@ -170,6 +201,7 @@
                     intervalId: null
                 }));
                 appState.alarmSound = loaded.alarmSound || 'synth';
+                appState.globalAlarmSoundUrl = loaded.globalAlarmSoundUrl || ''; // NEW
             }
             applyTheme(appState.theme);
         }
@@ -232,6 +264,8 @@
             document.getElementById('24hr-toggle').checked = appState.is24Hour;
             document.getElementById('snooze-input').value = appState.snoozeMinutes;
             document.getElementById('timezone-select').value = appState.timeZone;
+            // NEW: Load global alarm sound URL
+            document.getElementById('global-sound-url-input').value = appState.globalAlarmSoundUrl;
             
             document.getElementById('settings-modal').classList.remove('hidden');
         }
@@ -242,6 +276,8 @@
             appState.snoozeMinutes = parseInt(document.getElementById('snooze-input').value) || 5;
             appState.timeZone = document.getElementById('timezone-select').value;
             appState.theme = document.getElementById('theme-toggle').checked ? 'dark' : 'light';
+            // NEW: Save global alarm sound URL
+            appState.globalAlarmSoundUrl = document.getElementById('global-sound-url-input').value.trim(); 
             
             applyTheme(appState.theme);
             saveState();
@@ -357,11 +393,14 @@
             currentAlarmIndex = index;
             const modal = document.getElementById('alarm-editor-modal');
             const title = document.getElementById('alarm-editor-title');
-            const alarm = index !== -1 ? appState.alarms[index] : { name: 'New Alarm', time: '07:00', days: [] };
+            // Check for existing soundUrl or use default ''
+            const alarm = index !== -1 ? appState.alarms[index] : { name: 'New Alarm', time: '07:00', days: [], soundUrl: '' }; 
 
             title.textContent = index === -1 ? 'Add New Alarm' : 'Edit Alarm';
             document.getElementById('alarm-name').value = alarm.name;
             document.getElementById('alarm-time').value = alarm.time;
+            // NEW: Set the alarm's sound URL input
+            document.getElementById('alarm-sound-url').value = alarm.soundUrl || ''; 
             document.getElementById('delete-alarm-btn').classList.toggle('hidden', index === -1);
 
             // Reset day selectors
@@ -385,6 +424,7 @@
         function saveAlarm() {
             const name = document.getElementById('alarm-name').value.trim() || 'Untitled Alarm';
             const time = document.getElementById('alarm-time').value;
+            const soundUrl = document.getElementById('alarm-sound-url').value.trim(); // NEW: Get per-alarm sound URL
             
             const selectedDays = [];
             document.querySelectorAll('.day-selector').forEach(btn => {
@@ -403,7 +443,8 @@
                 name, 
                 time, 
                 days: selectedDays, 
-                enabled: true 
+                enabled: true,
+                soundUrl: soundUrl // NEW: Save the sound URL
             };
 
             if (currentAlarmIndex !== -1) {
@@ -457,7 +498,8 @@
                     renderAlarms(); // Rerender to show disabled state
 
                     const names = triggeredAlarms.map(a => a.name).join(', ');
-                    showAlarmModal(names, 'alarm', triggeredAlarms[0].id, currentTime);
+                    // Pass the alarm's custom sound URL to the modal/player
+                    showAlarmModal(names, 'alarm', triggeredAlarms[0].id, currentTime, triggeredAlarms[0].soundUrl);
                 }
             }
         }
@@ -480,8 +522,14 @@
         }
 
         function updateTimerInputDisplay() {
-            const totalSeconds = currentTimerInput.raw;
-            let display = String(totalSeconds).padStart(6, '0');
+            let currentRaw = String(currentTimerInput.raw || 0);
+
+            // Pad the raw string to a minimum of 6 digits (for H H M M S S formatting logic)
+            // But only keep the last 6 digits of input
+            let display = currentRaw.padStart(6, '0');
+            if (display.length > 6) {
+                display = display.substring(display.length - 6);
+            }
             
             // Format H H M M S S
             const h = display.substring(0, display.length - 4);
@@ -500,6 +548,7 @@
             document.getElementById('timer-input-display').textContent = formattedTime;
         }
 
+
         function numpadPress(digit) {
             let currentRaw = String(currentTimerInput.raw || 0);
             
@@ -509,11 +558,16 @@
                 currentRaw += digit;
             }
 
-            // Ensure leading zeros are removed when interpreting as a number
-            currentTimerInput.raw = parseInt(currentRaw || '0');
+            // Ensure leading zeros are removed when interpreting as a number, but limit to the last 6 digits (if input exceeded 6 before delete)
+            let parsedRaw = parseInt(currentRaw || '0');
+            if (String(parsedRaw).length > 6) {
+                 parsedRaw = parseInt(String(parsedRaw).slice(-6));
+            }
+            currentTimerInput.raw = parsedRaw;
 
             updateTimerInputDisplay();
         }
+
 
         function addTimer() {
             const totalSeconds = (currentTimerInput.hours * 3600) + (currentTimerInput.minutes * 60) + currentTimerInput.seconds;
@@ -681,13 +735,18 @@
 
         function lapStopwatch() {
             const sw = getActiveStopwatch();
-            const currentLapTime = formatSeconds(Math.floor(sw.elapsedSeconds));
+            const totalElapsed = sw.elapsedSeconds;
+            
+            // Calculate time since last lap/start
+            const lastLapRaw = sw.laps.length > 0 ? sw.laps[sw.laps.length - 1].rawSeconds : 0;
+            const lapTimeRaw = totalElapsed - lastLapRaw;
+
             sw.laps.push({
                 index: sw.laps.length + 1,
-                time: currentLapTime,
-                rawSeconds: sw.elapsedSeconds
+                time: formatSeconds(Math.floor(lapTimeRaw)),
+                rawSeconds: totalElapsed
             });
-            renderStopwatches();
+            renderLaps(); // Re-render lap list
         }
 
         function tickStopwatch() {
@@ -708,7 +767,7 @@
 
                 display.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(2, '0')}`;
             }
-            renderLaps();
+            renderLaps(); // Re-render lap list for time updates
         }
         
         function updateStopwatchName(e) {
@@ -724,12 +783,28 @@
 
             lapList.innerHTML = '';
 
+            // Calculate 'time' since last lap for the current running time
+            const lastLapRaw = sw.laps.length > 0 ? sw.laps[sw.laps.length - 1].rawSeconds : 0;
+            const currentLapTime = sw.elapsedSeconds - lastLapRaw;
+
+            // 1. Current Lap (if running)
+            if (sw.isRunning && sw.elapsedSeconds > 0) {
+                 const currentLapItem = document.createElement('li');
+                 currentLapItem.className = 'flex justify-between items-center p-2 border-b border-text-secondary border-opacity-30 bg-accent-color bg-opacity-10';
+                 currentLapItem.innerHTML = `
+                    <span class="font-bold text-accent-color">Lap ${sw.laps.length + 1} (Current)</span>
+                    <span class="font-mono">${formatSeconds(Math.floor(currentLapTime))}</span>
+                 `;
+                 lapList.appendChild(currentLapItem);
+            }
+
+            // 2. Completed Laps
             sw.laps.slice().reverse().forEach(lap => {
                 const item = document.createElement('li');
                 item.className = 'flex justify-between items-center p-2 border-b border-text-secondary border-opacity-30';
                 item.innerHTML = `
-                    <span class="font-bold text-accent-color">Lap ${lap.index}</span>
-                    <span class="font-mono">${lap.time}</span>
+                    <span class="font-bold text-text-primary">Lap ${lap.index}</span>
+                    <span class="font-mono text-text-secondary">${lap.time}</span>
                 `;
                 lapList.appendChild(item);
             });
@@ -742,7 +817,13 @@
             // Update main display
             const display = document.getElementById('stopwatch-display');
             if (display) {
-                display.textContent = formatSeconds(Math.floor(sw.elapsedSeconds)) + '.00';
+                // Initial render with .00 milliseconds, or when paused. Ticks update it with true milliseconds.
+                const totalSeconds = sw.elapsedSeconds;
+                const h = Math.floor(totalSeconds / 3600);
+                const m = Math.floor((totalSeconds % 3600) / 60);
+                const s = Math.floor(totalSeconds % 60);
+                const ms = Math.floor((totalSeconds * 100) % 100);
+                display.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(2, '0')}`;
             }
             
             document.getElementById('stopwatch-name').value = sw.name;
@@ -751,7 +832,7 @@
             document.getElementById('sw-start-btn').classList.toggle('hidden', isRunning);
             document.getElementById('sw-pause-btn').classList.toggle('hidden', !isRunning);
             document.getElementById('sw-lap-btn').disabled = !isRunning;
-            document.getElementById('sw-stop-btn').disabled = isRunning && sw.elapsedSeconds === 0;
+            document.getElementById('sw-stop-btn').disabled = sw.elapsedSeconds === 0;
 
             renderLaps();
         }
@@ -761,8 +842,10 @@
         let activeTriggerId = null;
         let activeTriggerType = null;
         
-        function showAlarmModal(nameList, type, id, time = '') {
-            playAlarm();
+        // Updated showAlarmModal to accept a soundUrl parameter
+        function showAlarmModal(nameList, type, id, time = '', soundUrl = '') { 
+            // Pass the specific sound URL (if provided) to the player
+            playAlarm(soundUrl); 
             activeTriggerId = id;
             activeTriggerType = type;
 
@@ -848,7 +931,6 @@
 
     </script>
 
-    <!-- Header and Settings Cog -->
     <header class="flex justify-between items-center mb-6">
         <h1 class="text-xl font-bold text-accent-color">Outtie Clock</h1>
         <button onclick="openSettings()" class="text-text-primary text-2xl hover:text-accent-color transition duration-200 p-2 rounded-full hover:bg-bg-secondary">
@@ -856,13 +938,11 @@
         </button>
     </header>
 
-    <!-- Main Clock Display -->
     <main class="flex-grow flex flex-col items-center justify-center">
         <div id="current-time" class="font-mono mb-8 text-center" style="color: var(--text-primary);">
             --:--:--
         </div>
         
-        <!-- Tab Navigation -->
         <nav class="flex space-x-2 md:space-x-4 p-2 rounded-xl bg-bg-secondary shadow-inner max-w-lg w-full justify-center">
             <button id="tab-clock" onclick="switchTab('clock')" class="tab-btn flex-1 py-2 px-3 md:px-6 rounded-lg text-sm md:text-base font-semibold transition duration-200">
                 <i class="fas fa-clock mr-1"></i> Clock
@@ -878,10 +958,8 @@
             </button>
         </nav>
         
-        <!-- Content Area -->
         <div class="mt-8 w-full max-w-2xl p-4 md:p-6 rounded-xl bg-bg-secondary shadow-2xl">
             
-            <!-- Clock Tab Content (Empty, shows main time) -->
             <div id="content-clock" class="tab-content">
                 <p class="text-center text-text-secondary mt-8">Your clock settings are managed in the <i class="fas fa-cog"></i> cogwheel menu.</p>
                 <div class="text-center mt-4 p-2 rounded-lg" style="color: var(--accent-color);">
@@ -889,28 +967,23 @@
                 </div>
             </div>
             
-            <!-- Alarms Tab Content -->
             <div id="content-alarms" class="tab-content hidden">
                 <h2 class="text-2xl font-semibold mb-4 text-accent-color">My Alarms</h2>
                 <div id="alarms-list" class="max-h-96 overflow-y-auto custom-scrollbar">
-                    <!-- Alarm items will be rendered here -->
-                </div>
+                    </div>
                 <button onclick="openAlarmEditor()" class="w-full mt-6 py-3 bg-accent-color text-white rounded-lg font-bold hover:opacity-90 transition duration-150 shadow-md">
                     <i class="fas fa-plus mr-2"></i> Add Alarm
                 </button>
             </div>
 
-            <!-- Timers Tab Content -->
             <div id="content-timers" class="tab-content hidden">
                 <h2 class="text-2xl font-semibold mb-4 text-accent-color">Set New Timer</h2>
 
-                <!-- Timer Input Display -->
                 <div id="timer-input-display" class="text-center text-5xl font-mono p-4 mb-6 rounded-lg bg-bg-primary shadow-inner mx-auto max-w-xs" style="color: var(--accent-color);">
                     00:00:00
                 </div>
                 <input id="new-timer-name" type="text" placeholder="Timer Name" value="New Timer" class="w-full p-3 mb-6 rounded-lg bg-bg-primary text-text-primary focus:ring-2 focus:ring-accent-color transition" onchange="this.value = this.value.trim() || 'Untitled Timer'">
 
-                <!-- Numpad -->
                 <div id="timer-numpad" class="grid grid-cols-3 gap-2 text-text-primary" style="--bg-secondary: var(--bg-primary); --text-primary: var(--text-primary);">
                     <button data-digit="1" class="numpad-btn" style="background-color: var(--text-primary);">1</button>
                     <button data-digit="2" class="numpad-btn" style="background-color: var(--text-primary);">2</button>
@@ -934,12 +1007,10 @@
                 <div class="mt-8">
                     <h3 class="text-xl font-semibold mb-3 text-text-primary">Active Timers</h3>
                     <div id="timers-list" class="max-h-60 overflow-y-auto custom-scrollbar">
-                        <!-- Timer items will be rendered here -->
-                    </div>
+                        </div>
                 </div>
             </div>
 
-            <!-- Stopwatch Tab Content -->
             <div id="content-stopwatches" class="tab-content hidden text-center">
                 <input id="stopwatch-name" type="text" placeholder="Stopwatch Name" value="Primary Stopwatch" class="text-center text-lg font-semibold w-full p-2 mb-4 rounded-lg bg-bg-primary text-text-primary focus:ring-2 focus:ring-accent-color transition" onchange="updateStopwatchName(this)">
                 
@@ -947,7 +1018,6 @@
                     00:00:00.00
                 </div>
 
-                <!-- Controls -->
                 <div class="flex justify-center space-x-4 mb-8">
                     <button id="sw-stop-btn" onclick="stopStopwatch()" class="w-16 h-16 rounded-full bg-red-600 text-white text-xl shadow-xl hover:bg-red-700 transition disabled:opacity-50" disabled>
                         <i class="fas fa-redo"></i>
@@ -966,26 +1036,22 @@
                     </button>
                 </div>
 
-                <!-- Lap List -->
                 <div class="mt-4">
                     <h3 class="text-xl font-semibold mb-3 text-text-primary">Lap History</h3>
                     <ul id="lap-list" class="max-h-60 overflow-y-auto custom-scrollbar text-text-secondary text-left p-2 rounded-lg bg-bg-primary">
-                        <!-- Laps rendered here -->
-                    </ul>
+                        </ul>
                 </div>
             </div>
 
         </div>
     </main>
 
-    <!-- --- SETTINGS MODAL --- -->
     <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 hidden dark">
         <div class="bg-bg-secondary p-8 rounded-2xl w-full max-w-md shadow-2xl" style="background-color: var(--bg-secondary); color: var(--text-primary);">
             <h2 class="text-2xl font-bold mb-6 text-accent-color">Clock Settings</h2>
 
             <div class="space-y-4">
                 
-                <!-- Theme Selector -->
                 <div class="flex justify-between items-center p-3 rounded-lg bg-bg-primary">
                     <span>Dark/Light Theme</span>
                     <label class="relative inline-flex items-center cursor-pointer">
@@ -994,7 +1060,6 @@
                     </label>
                 </div>
 
-                <!-- Time Format -->
                 <div class="flex justify-between items-center p-3 rounded-lg bg-bg-primary">
                     <span>24-Hour Format (HH:MM)</span>
                     <label class="relative inline-flex items-center cursor-pointer">
@@ -1003,24 +1068,25 @@
                     </label>
                 </div>
 
-                <!-- Timezone Selector -->
                 <div class="p-3 rounded-lg bg-bg-primary">
                     <label for="timezone-select" class="block mb-2">Timezone Selection</label>
                     <select id="timezone-select" class="w-full p-2 rounded-md bg-bg-secondary border border-text-secondary border-opacity-30">
-                        <!-- Timezones populated by JS -->
-                    </select>
+                        </select>
                 </div>
 
-                <!-- Snooze Time -->
                 <div class="p-3 rounded-lg bg-bg-primary">
                     <label for="snooze-input" class="block mb-2">Snooze Duration (minutes)</label>
                     <input id="snooze-input" type="number" min="1" max="60" value="5" class="w-full p-2 rounded-md bg-bg-secondary border border-text-secondary border-opacity-30">
                 </div>
                 
-                <!-- Default Alarm Sound -->
                 <div class="p-3 rounded-lg bg-bg-primary">
-                    <label class="block mb-2">Default Alarm Sound (Currently: Synth)</label>
-                    <p class="text-sm text-text-secondary">Using Tone.js synthesizer instead of "default alarm sound.mp3" due to embedding restrictions.</p>
+                    <label for="global-sound-url-input" class="block mb-2 font-semibold">Default Alarm Sound URL (Optional)</label>
+                    <input id="global-sound-url-input" type="url" placeholder="Paste .mp3, .ogg, or .wav URL here" class="w-full p-2 rounded-md bg-bg-secondary text-text-primary border border-text-secondary border-opacity-30">
+                    <p class="text-xs text-text-secondary mt-2">
+                        To host a custom sound file (MP3, OGG, WAV), we recommend using a free service like 
+                        <a href="https://catbox.moe/" target="_blank" class="text-accent-color underline">catbox.moe</a> 
+                        and pasting the direct file link above. If empty, a default synth sound will play.
+                    </p>
                 </div>
 
             </div>
@@ -1031,26 +1097,28 @@
         </div>
     </div>
     
-    <!-- --- ALARM EDITOR MODAL --- -->
     <div id="alarm-editor-modal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 hidden">
         <div class="bg-bg-secondary p-8 rounded-2xl w-full max-w-md shadow-2xl" style="background-color: var(--bg-secondary); color: var(--text-primary);">
             <h2 id="alarm-editor-title" class="text-2xl font-bold mb-6 text-accent-color">Add New Alarm</h2>
 
             <div class="space-y-4">
                 
-                <!-- Alarm Name -->
                 <div>
                     <label for="alarm-name" class="block mb-2">Alarm Name</label>
                     <input id="alarm-name" type="text" value="New Alarm" class="w-full p-3 rounded-lg bg-bg-primary text-text-primary focus:ring-2 focus:ring-accent-color transition">
                 </div>
 
-                <!-- Alarm Time -->
                 <div>
                     <label for="alarm-time" class="block mb-2">Time (HH:MM)</label>
                     <input id="alarm-time" type="time" value="07:00" class="w-full p-3 text-2xl rounded-lg bg-bg-primary text-text-primary focus:ring-2 focus:ring-accent-color transition">
                 </div>
                 
-                <!-- Day Selectors -->
+                <div>
+                    <label for="alarm-sound-url" class="block mb-2">Custom Sound URL (Optional)</label>
+                    <input id="alarm-sound-url" type="url" placeholder="Optional: custom sound URL" class="w-full p-3 rounded-lg bg-bg-primary text-text-primary focus:ring-2 focus:ring-accent-color transition">
+                    <p class="text-xs text-text-secondary mt-1">Leave empty to use the Default Alarm Sound from Settings.</p>
+                </div>
+
                 <div class="mt-4">
                     <label class="block mb-2">Repeat</label>
                     <div class="flex justify-between text-xs sm:text-sm font-semibold">
@@ -1080,7 +1148,6 @@
         </div>
     </div>
 
-    <!-- --- ALARM/TIMER TRIGGER MODAL --- -->
     <div id="trigger-modal" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 hidden">
         <div class="bg-bg-secondary p-8 rounded-2xl w-full max-w-sm text-center shadow-2xl border-4 border-accent-color animate-pulse" style="background-color: var(--bg-secondary); color: var(--text-primary);">
             <i class="fas fa-exclamation-triangle text-6xl mb-4" style="color: var(--accent-color);"></i>
