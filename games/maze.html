@@ -1,322 +1,270 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Retro Mouse Maze</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Retro Maze Game</title>
 <style>
-  body {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    margin: 0;
-    background-color: #000;
-    font-family: 'Courier New', monospace;
-    color: #0f0;
-    user-select: none;
-  }
+    body {
+        background: #111;
+        color: #0f0;
+        font-family: monospace;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        overflow: hidden;
+    }
 
-  #scoreboard {
-    margin-bottom: 10px;
-    font-size: 1.5em;
-  }
+    #maze {
+        position: relative;
+        width: 800px;
+        height: 600px;
+        background: #000;
+        border: 3px solid #0f0;
+        overflow: hidden;
+        box-shadow: 0 0 20px #0f0;
+    }
 
-  #game-container {
-    position: relative;
-    width: 400px;
-    height: 600px;
-    border: 5px solid #0f0;
-    box-shadow: 0 0 20px #0f0;
-    background-color: #222;
-    overflow: hidden;
-  }
+    /* Magenta maze walls */
+    .cell {
+        position: absolute;
+        background: magenta;
+        box-shadow: 0 0 6px magenta;
+    }
 
-  #maze {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-  }
+    /* Start & Finish blocks - bright green */
+    #start, #finish {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        line-height: 40px;
+        text-align: center;
+        font-weight: bold;
+        border: 2px solid #0f0;
+        border-radius: 5px;
+        color: #000;
+        background: #00ff00;
+        box-shadow: 0 0 10px #0f0;
+        z-index: 2;
+        user-select: none;
+    }
 
-  .wall {
-    position: absolute;
-    background-color: #ff00ff;
-    box-shadow: 0 0 5px #ff00ff;
-  }
+    #message {
+        margin-top: 20px;
+        color: #0f0;
+    }
 
-  #start, #finish {
-    position: absolute;
-    width: 80px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-  }
+    #gameover {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.9);
+        color: #0f0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        display: none;
+        z-index: 5;
+    }
 
-  #start {
-    bottom: 0;
-    left: 10px;
-    background-color: #00ff00;
-    color: #000;
-  }
+    #restartBtn {
+        background: #0f0;
+        color: #000;
+        font-weight: bold;
+        border: none;
+        padding: 10px 20px;
+        margin-top: 20px;
+        cursor: pointer;
+        font-family: monospace;
+    }
 
-  #finish {
-    top: 0;
-    right: 10px;
-    background-color: #ffff00;
-    color: #000;
-  }
-
-  #message {
-    margin-top: 10px;
-    font-size: 1.2em;
-    height: 20px;
-  }
-
-  /* Game Over Screen Overlay */
-  #game-over-screen {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.9);
-    color: #0f0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5em;
-    text-align: center;
-    z-index: 10;
-    display: none;
-  }
-
-  #restart-btn {
-    margin-top: 20px;
-    padding: 10px 20px;
-    background-color: #0f0;
-    color: #000;
-    font-weight: bold;
-    border: none;
-    cursor: pointer;
-    font-family: 'Courier New', monospace;
-    box-shadow: 0 0 10px #0f0;
-  }
-
-  #restart-btn:hover {
-    background-color: #fff;
-  }
+    #restartBtn:hover {
+        background: #9f9;
+    }
 </style>
 </head>
 <body>
+    <h1>RETRO MAZE</h1>
+    <div id="maze"></div>
+    <div id="message"></div>
 
-<div id="scoreboard">SCORE: <span id="score">0</span></div>
-
-<div id="game-container">
-  <div id="maze">
-    <div id="start">START</div>
-    <div id="finish">FINISH</div>
-  </div>
-
-  <!-- Game Over Screen -->
-  <div id="game-over-screen">
-    <div id="game-over-text">GAME OVER!</div>
-    <div id="final-score">Score: 0</div>
-    <button id="restart-btn">RESTART</button>
-  </div>
-</div>
-
-<div id="message">Move your mouse to START to begin!</div>
+    <div id="gameover">
+        <div id="finalText"></div>
+        <button id="restartBtn">RESTART</button>
+    </div>
 
 <script>
-const gameContainer = document.getElementById('game-container');
-const maze = document.getElementById('maze');
-const startZone = document.getElementById('start');
-const finishZone = document.getElementById('finish');
-const scoreElement = document.getElementById('score');
-const messageElement = document.getElementById('message');
-const gameOverScreen = document.getElementById('game-over-screen');
-const finalScoreElement = document.getElementById('final-score');
-const restartButton = document.getElementById('restart-btn');
+const mazeEl = document.getElementById('maze');
+const msg = document.getElementById('message');
+const gameover = document.getElementById('gameover');
+const finalText = document.getElementById('finalText');
+const restartBtn = document.getElementById('restartBtn');
 
+const rows = 15; // bigger grid (more cells = bigger maze)
+const cols = 20;
+const cellSize = 40;
 let score = 0;
-let gameActive = false;
 
-/* ------------------------------
-   Maze Generation (DFS algorithm)
-   ------------------------------ */
-function generateMaze(rows, cols) {
-  const grid = Array.from({ length: rows }, () =>
-    Array.from({ length: cols }, () => ({ visited: false, walls: [true, true, true, true] }))
-  );
+// directions for maze generation
+const dirs = [
+    {x:0, y:-1}, // up
+    {x:1, y:0},  // right
+    {x:0, y:1},  // down
+    {x:-1, y:0}  // left
+];
 
-  function shuffle(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [array[i], array[j]] = [array[j], array[i]];
+function shuffle(arr) {
+    for (let i=arr.length-1; i>0; i--) {
+        const j = Math.floor(Math.random()*(i+1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
     }
-    return array;
-  }
-
-  const stack = [];
-  const startRow = rows - 1;
-  const startCol = 0;
-  grid[startRow][startCol].visited = true;
-  stack.push([startRow, startCol]);
-
-  const directions = [
-    [-1, 0, 0, 2], // up
-    [0, 1, 1, 3],  // right
-    [1, 0, 2, 0],  // down
-    [0, -1, 3, 1], // left
-  ];
-
-  while (stack.length) {
-    const [r, c] = stack[stack.length - 1];
-    const shuffled = shuffle(directions.slice());
-    let moved = false;
-
-    for (const [dr, dc, wall, oppWall] of shuffled) {
-      const nr = r + dr;
-      const nc = c + dc;
-      if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !grid[nr][nc].visited) {
-        grid[r][c].walls[wall] = false;
-        grid[nr][nc].walls[oppWall] = false;
-        grid[nr][nc].visited = true;
-        stack.push([nr, nc]);
-        moved = true;
-        break;
-      }
-    }
-
-    if (!moved) stack.pop();
-  }
-
-  return grid;
+    return arr;
 }
 
-/* ------------------------------
-   Render Maze
-   ------------------------------ */
+function generateMaze(r, c) {
+    let grid = Array(r).fill().map(()=>Array(c).fill(1)); // 1 = wall
+    function carve(x,y) {
+        grid[y][x]=0;
+        let shuffled = shuffle([...dirs]);
+        for (let d of shuffled) {
+            let nx = x + d.x*2;
+            let ny = y + d.y*2;
+            if (ny>=0 && ny<r && nx>=0 && nx<c && grid[ny][nx]===1) {
+                grid[y+d.y][x+d.x]=0;
+                carve(nx, ny);
+            }
+        }
+    }
+    carve(1,1);
+    return grid;
+}
+
 function renderMaze() {
-  maze.querySelectorAll('.wall').forEach(w => w.remove());
+    mazeEl.innerHTML = '';
+    const grid = generateMaze(rows, cols);
 
-  const rows = 15;
-  const cols = 10;
-  const cellW = 400 / cols;
-  const cellH = 600 / rows;
-  const grid = generateMaze(rows, cols);
+    // --- START/FINISH CONFIGURATION ---
+    let startY = rows - 2;
+    let startX = 1;
+    let finishY = 1;
+    let finishX = cols - 2;
 
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const x = c * cellW;
-      const y = r * cellH;
-      const cell = grid[r][c];
-      if (cell.walls[0]) createWall(x, y, cellW, 4); // top
-      if (cell.walls[1]) createWall(x + cellW - 4, y, 4, cellH); // right
-      if (cell.walls[2]) createWall(x, y + cellH - 4, cellW, 4); // bottom
-      if (cell.walls[3]) createWall(x, y, 4, cellH); // left
+    // 1. CARVE START CELL FREE (4 SIDES)
+    // The maze generator ensures the cell itself (grid[startY][startX]) is open (0).
+    // Now, ensure the cells immediately adjacent to the START cell are open too.
+    // Left of START (x-1): Open if it's a passage cell.
+    if (startX > 0) grid[startY][startX - 1] = 0;
+    // Above START (y-1): Open if it's a passage cell.
+    if (startY > 0) grid[startY - 1][startX] = 0;
+    // Right of START (x+1): Open if it's a passage cell.
+    if (startX < cols - 1) grid[startY][startX + 1] = 0;
+    // Below START (y+1): This should be the outer wall. We handle this next.
+
+
+    // 2. CREATE OUTER ENTRY GAP (Bottom Wall)
+    // The START cell is at (startX, startY). The outer wall is at (startY+1).
+    // The maze generator sets up the outer wall around the edge.
+    // We break the wall at the bottom boundary cell directly below START.
+    if (startY < rows - 1) {
+        grid[startY + 1][startX] = 0; // The cell at the very bottom row, beneath the start, is now a passage.
     }
-  }
-}
 
-function createWall(x, y, w, h) {
-  const wall = document.createElement('div');
-  wall.className = 'wall';
-  wall.style.left = `${x}px`;
-  wall.style.top = `${y}px`;
-  wall.style.width = `${w}px`;
-  wall.style.height = `${h}px`;
-  maze.appendChild(wall);
-}
+    // 3. Ensure the finish area is clear for the exit path
+    grid[finishY][finishX] = 0;
+    if (finishY > 0) grid[finishY - 1][finishX] = 0; // Open area above FINISH for mouse exit
+    // --- END CONFIGURATION ---
 
-/* ------------------------------
-   Collision + Game Logic
-   ------------------------------ */
-function isTouching(x, y, element) {
-  const rect = element.getBoundingClientRect();
-  const containerRect = gameContainer.getBoundingClientRect();
-  const relativeX = x;
-  const relativeY = y;
-  return (
-    relativeX > (rect.left - containerRect.left) &&
-    relativeX < (rect.right - containerRect.left) &&
-    relativeY > (rect.top - containerRect.top) &&
-    relativeY < (rect.bottom - containerRect.top)
-  );
-}
-
-function handleMouseMove(event) {
-  if (!gameActive) return;
-  const containerRect = gameContainer.getBoundingClientRect();
-  const mouseX = event.clientX - containerRect.left;
-  const mouseY = event.clientY - containerRect.top;
-
-  const walls = document.querySelectorAll('.wall');
-  for (const wall of walls) {
-    if (isTouching(mouseX, mouseY, wall)) {
-      triggerGameOver();
-      return;
+    // render walls
+    for (let y=0; y<rows; y++) {
+        for (let x=0; x<cols; x++) {
+            if (grid[y][x] === 1) {
+                let div = document.createElement('div');
+                div.classList.add('cell');
+                div.style.left = (x*cellSize)+'px';
+                div.style.top = (y*cellSize)+'px';
+                div.style.width = cellSize+'px';
+                div.style.height = cellSize+'px';
+                mazeEl.appendChild(div);
+            }
+        }
     }
-  }
 
-  if (isTouching(mouseX, mouseY, finishZone)) {
-    pointScored();
-  }
+    // place start (bottom-left open cell)
+    let start = document.createElement('div');
+    start.id = 'start';
+    start.style.left = startX*cellSize+'px';
+    // Position START slightly lower to sit at the edge where the gap is, and be centered.
+    start.style.top = startY*cellSize+'px';
+    start.textContent = 'START';
+    mazeEl.appendChild(start);
+
+    // place finish (top-right open cell)
+    let finish = document.createElement('div');
+    finish.id = 'finish';
+    finish.style.left = finishX*cellSize+'px';
+    finish.style.top = finishY*cellSize+'px';
+    finish.textContent = 'FINISH';
+    mazeEl.appendChild(finish);
+
+    // collision detection
+    const walls = mazeEl.querySelectorAll('.cell');
+    let startTouched = false;
+
+    start.onmouseenter = () => {
+        // Prevent accidental re-start before proper reset
+        if (!startTouched) {
+            startTouched = true;
+            msg.textContent = 'Navigate to FINISH!';
+        }
+    };
+
+    finish.onmouseenter = () => {
+        if (startTouched) {
+            score++;
+            msg.textContent = 'LEVEL COMPLETE! Score: '+score;
+            startTouched = false; // Must re-enter START to continue
+            setTimeout(renderMaze, 1000);
+        }
+    };
+
+    walls.forEach(w=>{
+        w.onmouseenter = () => {
+            if (startTouched) {
+                msg.textContent = 'You hit a wall! Game Over.';
+                showGameOver();
+            }
+        };
+    });
+
+    // Handle mouse leaving the whole maze area (boundary fail)
+    mazeEl.onmouseleave = () => {
+        if (startTouched) {
+            msg.textContent = 'You left the maze boundary! Game Over.';
+            showGameOver();
+        }
+    };
 }
 
-function startGame() {
-  if (!gameActive) {
-    gameActive = true;
-    messageElement.textContent = "GO! Don't touch the magenta walls!";
-    gameOverScreen.style.display = "none";
-    gameContainer.addEventListener('mousemove', handleMouseMove);
-  }
+function showGameOver() {
+    // Clear all mouse listeners to stop the game state
+    // We don't need to explicitly remove them if we rely on the `startTouched` flag
+    // and the `onmouseenter` handlers, but this is a good habit.
+    gameover.style.display = 'flex';
+    finalText.textContent = `GAME OVER — SCORE: ${score}`;
 }
 
-function triggerGameOver() {
-  gameActive = false;
-  gameContainer.removeEventListener('mousemove', handleMouseMove);
-  finalScoreElement.textContent = `Score: ${score}`;
-  gameOverScreen.style.display = "flex";
-}
+restartBtn.onclick = () => {
+    gameover.style.display = 'none';
+    score = 0;
+    msg.textContent = '';
+    renderMaze();
+};
 
-function pointScored() {
-  score++;
-  scoreElement.textContent = score;
-  messageElement.textContent = `LEVEL COMPLETE! Score: ${score}`;
-  gameActive = false;
-  gameContainer.removeEventListener('mousemove', handleMouseMove);
-  renderMaze();
-}
-
-function restartGame() {
-  score = 0;
-  scoreElement.textContent = score;
-  messageElement.textContent = "Move your mouse to START to begin!";
-  renderMaze();
-  gameOverScreen.style.display = "none";
-}
-
-/* ------------------------------
-   Initialization
-   ------------------------------ */
 renderMaze();
-
-startZone.addEventListener('mouseenter', startGame);
-
-gameContainer.addEventListener('mouseleave', () => {
-  if (gameActive) {
-    triggerGameOver();
-  }
-});
-
-restartButton.addEventListener('click', restartGame);
 </script>
 </body>
 </html>
