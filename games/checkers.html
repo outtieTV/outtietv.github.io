@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Checkers</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: #f4f4f4;
+      margin: 0;
+      padding: 20px;
+      touch-action: none;
+    }
+    h2 { margin-bottom: 0.5em; }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(8, 10vmin);
+      grid-template-rows: repeat(8, 10vmin);
+      border: 5px solid #333;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    .square {
+      width: 10vmin;
+      height: 10vmin;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      user-select: none;
+    }
+    .dark { background: #5d4037; }
+    .light { background: #efebe9; }
+    .piece {
+      width: 8vmin;
+      height: 8vmin;
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+      cursor: grab;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      transition: transform 0.1s;
+    }
+    .red-piece { background: #d32f2f; }
+    .black-piece { background: #1a1a1a; }
+    .piece.king::after {
+      content: "★";
+      color: gold;
+      font-size: 3vmin;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-shadow: 0 0 3px #000;
+    }
+    .piece.active { outline: 3px solid yellow; }
+    .valid-move { box-shadow: inset 0 0 0 3px limegreen; }
+    .info {
+      margin-top: 10px;
+      font-weight: bold;
+      text-align: center;
+    }
+    .scores {
+      margin-top: 5px;
+      font-size: 1.1em;
+    }
+  </style>
+</head>
+<body>
+  <h2>Checkers (Touch + Drag)</h2>
+  <div id="board" class="board"></div>
+  <div class="info" id="turnInfo">Black's Turn</div>
+  <div class="scores">Black Captures: <span id="blackScore">0</span> | Red Captures: <span id="redScore">0</span></div>
+
+  <script>
+    const boardEl = document.getElementById("board");
+    const turnInfo = document.getElementById("turnInfo");
+    const blackScoreEl = document.getElementById("blackScore");
+    const redScoreEl = document.getElementById("redScore");
+
+    const SIZE = 8;
+    let board = [];
+    let currentPlayer = "black";
+    let selected = null;
+    let dragPiece = null;
+    let scores = { red: 0, black: 0 };
+
+    function initBoard() {
+      board = [];
+      boardEl.innerHTML = "";
+      for (let r = 0; r < SIZE; r++) {
+        const row = [];
+        for (let c = 0; c < SIZE; c++) {
+          const dark = (r + c) % 2;
+          const sq = document.createElement("div");
+          sq.className = "square " + (dark ? "dark" : "light");
+          sq.dataset.r = r;
+          sq.dataset.c = c;
+
+          if (dark && (r < 3 || r > 4)) {
+            const piece = document.createElement("div");
+            piece.className = "piece " + (r < 3 ? "red-piece" : "black-piece");
+            piece.dataset.player = r < 3 ? "red" : "black";
+            sq.appendChild(piece);
+          }
+
+          sq.addEventListener("click", onSquareClick);
+          boardEl.appendChild(sq);
+          row.push({ el: sq });
+        }
+        board.push(row);
+      }
+    }
+
+    function clearHighlights() {
+      document.querySelectorAll(".valid-move").forEach(e => e.classList.remove("valid-move"));
+      document.querySelectorAll(".piece.active").forEach(e => e.classList.remove("active"));
+    }
+
+    function onSquareClick(e) {
+      const sq = e.currentTarget;
+      const r = +sq.dataset.r, c = +sq.dataset.c;
+      const piece = sq.querySelector(".piece");
+      if (piece && piece.dataset.player === currentPlayer) {
+        clearHighlights();
+        selected = { r, c, piece };
+        piece.classList.add("active");
+        highlightMoves(r, c, piece);
+      } else if (sq.classList.contains("valid-move") && selected) {
+        makeMove(selected.r, selected.c, r, c);
+      }
+    }
+
+    function inBounds(r, c) { return r >= 0 && r < SIZE && c >= 0 && c < SIZE; }
+
+    function getMoves(r, c, piece) {
+      const dirs = [];
+      if (piece.dataset.player === "black" || piece.classList.contains("king")) dirs.push([-1, -1], [-1, 1]);
+      if (piece.dataset.player === "red" || piece.classList.contains("king")) dirs.push([1, -1], [1, 1]);
+      const moves = [];
+      dirs.forEach(([dr, dc]) => {
+        const nr = r + dr, nc = c + dc;
+        const jr = r + dr * 2, jc = c + dc * 2;
+        if (inBounds(nr, nc) && inBounds(jr, jc)) {
+          const midPiece = board[nr][nc].el.querySelector(".piece");
+          const dest = board[jr][jc].el.querySelector(".piece");
+          if (midPiece && midPiece.dataset.player !== piece.dataset.player && !dest)
+            moves.push({ r: jr, c: jc, jump: true, mid: [nr, nc] });
+        }
+        if (inBounds(nr, nc) && !board[nr][nc].el.querySelector(".piece"))
+          moves.push({ r: nr, c: nc, jump: false });
+      });
+      return moves;
+    }
+
+    function highlightMoves(r, c, piece) {
+      const allMoves = getMoves(r, c, piece);
+      const jumps = allMoves.filter(m => m.jump);
+      const moves = jumps.length ? jumps : allMoves;
+      moves.forEach(m => board[m.r][m.c].el.classList.add("valid-move"));
+    }
+
+    function makeMove(sr, sc, er, ec) {
+      const startSq = board[sr][sc].el;
+      const endSq = board[er][ec].el;
+      const piece = startSq.querySelector(".piece");
+      if (!piece) return;
+
+      const move = getMoves(sr, sc, piece).find(m => m.r === er && m.c === ec);
+      if (!move) return;
+
+      startSq.innerHTML = "";
+      endSq.appendChild(piece);
+
+      // Handle jump
+      if (move.jump) {
+        const [mr, mc] = move.mid;
+        const midSq = board[mr][mc].el;
+        const captured = midSq.querySelector(".piece");
+        if (captured) {
+          midSq.innerHTML = "";
+          scores[currentPlayer]++;
+          updateScores();
+        }
+        const nextJumps = getMoves(er, ec, piece).filter(m => m.jump);
+        if (nextJumps.length) {
+          clearHighlights();
+          selected = { r: er, c: ec, piece };
+          piece.classList.add("active");
+          nextJumps.forEach(m => board[m.r][m.c].el.classList.add("valid-move"));
+          return; // stay in same turn for multi-jump
+        }
+      }
+
+      // King promotion
+      if ((piece.dataset.player === "black" && er === 0) || (piece.dataset.player === "red" && er === 7))
+        piece.classList.add("king");
+
+      clearHighlights();
+      selected = null;
+      switchTurn();
+      checkWin();
+    }
+
+    function updateScores() {
+      blackScoreEl.textContent = scores.black;
+      redScoreEl.textContent = scores.red;
+    }
+
+    function switchTurn() {
+      currentPlayer = currentPlayer === "black" ? "red" : "black";
+      turnInfo.textContent = `${currentPlayer[0].toUpperCase() + currentPlayer.slice(1)}'s Turn`;
+    }
+
+    function checkWin() {
+      const reds = [...document.querySelectorAll(".red-piece")].length;
+      const blacks = [...document.querySelectorAll(".black-piece")].length;
+      if (reds === 0 || blacks === 0) {
+        setTimeout(() => alert(`${reds === 0 ? "Black" : "Red"} Wins!`), 300);
+      }
+    }
+
+    // Drag + Touch
+    boardEl.addEventListener("mousedown", startDrag);
+    boardEl.addEventListener("touchstart", startDrag, { passive: false });
+    boardEl.addEventListener("mousemove", moveDrag);
+    boardEl.addEventListener("touchmove", moveDrag, { passive: false });
+    boardEl.addEventListener("mouseup", endDrag);
+    boardEl.addEventListener("touchend", endDrag);
+
+    function startDrag(e) {
+      const piece = e.target.closest(".piece");
+      if (!piece || piece.dataset.player !== currentPlayer) return;
+      dragPiece = piece;
+      dragPiece.classList.add("active");
+      selected = { r: +piece.parentElement.dataset.r, c: +piece.parentElement.dataset.c, piece };
+      clearHighlights();
+      highlightMoves(selected.r, selected.c, piece);
+    }
+
+    function moveDrag(e) {
+      if (!dragPiece) return;
+      e.preventDefault();
+      const touch = e.touches ? e.touches[0] : e;
+      dragPiece.style.pointerEvents = "none";
+      const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+      dragPiece.style.pointerEvents = "";
+      dragPiece.style.transform = "translate(-50%, -50%) scale(1.1)";
+      if (elem?.classList.contains("square")) {
+        clearHighlights();
+        elem.classList.add("valid-move");
+      }
+    }
+
+    function endDrag(e) {
+      if (!dragPiece) return;
+      const touch = e.changedTouches ? e.changedTouches[0] : e;
+      dragPiece.style.pointerEvents = "none";
+      const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+      dragPiece.style.pointerEvents = "";
+      dragPiece.style.transform = "translate(-50%, -50%)";
+      const start = dragPiece.parentElement;
+      if (elem?.classList.contains("square")) {
+        const sr = +start.dataset.r, sc = +start.dataset.c;
+        const er = +elem.dataset.r, ec = +elem.dataset.c;
+        const moves = getMoves(sr, sc, dragPiece);
+        const valid = moves.find(m => m.r === er && m.c === ec);
+        if (valid) makeMove(sr, sc, er, ec);
+      }
+      dragPiece.classList.remove("active");
+      dragPiece = null;
+      clearHighlights();
+    }
+
+    initBoard();
+  </script>
+</body>
+</html>
