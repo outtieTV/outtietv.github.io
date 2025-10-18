@@ -1,432 +1,748 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OuttieTV's Notes WebApp</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>OuttieTV's Notes Webapp</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
 <style>
-:root {
-  --bg-color-light: #f5f5f5;
-  --text-color-light: #1c1c1c;
-  --note-bg-light: #ffffff;
-  --header-bg-light: #e0e0e0;
-  --border-color-light: #cccccc;
-  --button-bg-light: #4a90e2;
-  --button-text-light: #ffffff;
-}
-[data-theme="dark"] {
-  --bg-color-light: #1c1c1c;
-  --text-color-light: #f5f5f5;
-  --note-bg-light: #2c2c2c;
-  --header-bg-light: #3a3a3a;
-  --border-color-light: #444444;
-  --button-bg-light: #89cff0;
-  --button-text-light: #1c1c1c;
-}
+/* --- Styles: Layout, Theme Variables, and Components --- */
+:root{--bg:#f5f5f5;--text:#111;--card:#fff;--muted:#6a6a6a;--accent:#4a90e2;--header:#e9e9e9;--border:#d1d1d1;--hover:#e0e0e0;--red:#e24a4a;--green:#4ae24a}
+[data-theme="dark"]{--bg:#141414;--text:#eaeaea;--card:#1f1f1f;--muted:#9a9a9a;--accent:#7fbfff;--header:#2a2a2a;--border:#333;--hover:#2f2f2f;--red:#ff7f7f;--green:#7fff7f}
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+body{margin:0;font-family:Segoe UI,Inter,system-ui;background:var(--bg);color:var(--text);display:flex;min-height:100vh}
 
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: var(--bg-color-light);
-  color: var(--text-color-light);
-  transition: background-color 0.3s, color 0.3s;
-  min-height: 100vh;
-  padding: 20px;
-}
+/* Sidebar & Layout */
+.sidebar{width:260px;background:var(--card);border-right:1px solid var(--border);padding:16px;transition:.3s ease-in-out;display:flex;flex-direction:column;flex-shrink:0}
+.sidebar.collapsed{transform:translateX(-260px);margin-left:-260px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.main{flex:1;padding:20px;display:flex;flex-direction:column;gap:16px;min-width:0}
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 20px;
-  border-bottom: 1px solid var(--border-color-light);
-  background-color: var(--header-bg-light);
-  border-radius: 8px;
-}
-.header h1 { font-size: 1.8em; }
+/* General UI */
+button, select, input, textarea{font:inherit;border-radius:8px;box-sizing:border-box}
+button{cursor:pointer;transition:.1s}
+.btn{background:var(--accent);color:#fff;border:none;padding:8px 12px}
+.btn.secondary{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn.secondary:hover{background:var(--hover)}
+.btn.danger{background:var(--red);color:#fff;border:none}
+.btn.success{background:var(--green);color:#111;border:none}
 
-.control-group {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
+/* Modal */
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:60;padding:40px 20px;overflow-y:auto}
+.modal.open{display:block}
+.modal-card{background:var(--card);border:1px solid var(--border);border-radius:10px;max-width:800px;margin:0 auto;padding:20px;color:var(--text);width:100%}
 
-button, select {
-  padding: 10px 15px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 1em;
-}
-button { background-color: var(--button-bg-light); color: var(--button-text-light); }
-select {
-  background-color: var(--note-bg-light);
-  color: var(--text-color-light);
-  border: 1px solid var(--border-color-light);
-}
-button:hover { opacity: 0.9; }
+/* Notes List */
+.markdown-preview{border:1px solid var(--border);padding:10px;margin-top:10px;border-radius:8px;max-height:250px;overflow:auto}
+.note-item{display:grid;grid-template-columns:2fr 1fr 1fr 3fr 80px 80px;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer}
+.note-item.header{background:var(--header);font-weight:700;position:sticky;top:0;cursor:default}
+.note-body{max-height:110px;overflow:hidden}
 
-.notes-container {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  max-width: 1200px;
-  margin: 20px auto;
-}
-.note-item {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr 3fr 80px 80px;
-  align-items: start;
-  gap: 15px;
-  padding: 15px;
-  background-color: var(--note-bg-light);
-  border: 1px solid var(--border-color-light);
-  border-radius: 8px;
-}
-.note-body {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.note-actions, .note-view {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-direction: row;
-  writing-mode: horizontal-tb !important;
-  text-orientation: mixed !important;
-}
-.notes-container .note-item:first-child {
-  background-color: var(--header-bg-light);
-  font-weight: bold;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-.note-item:not(:first-child):hover { background-color: var(--header-bg-light); }
+/* Folder Tree View */
+#folders-container{display:flex;flex-direction:column;gap:4px;flex-grow:1;overflow-y:auto;margin-top:16px;padding-right:4px}
+.folder-item{display:flex;flex-direction:column;padding-left:0;border-left:none}
+.folder-header{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-radius:6px;cursor:pointer}
+.folder-header:hover{background:var(--hover)}
+.folder-item.active > .folder-header{background:var(--accent);color:#fff}
+.folder-name-wrapper{display:flex;align-items:center;flex-grow:1;min-width:0;overflow:hidden}
 
-.modal {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.4);
-  z-index: 100;
-  padding-top: 60px;
+/* NEW STYLES FOR FOLDER LEGIBILITY */
+.folder-name{
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    /* White text with a black outline/shadow for legibility on ANY background color */
+    color: white !important;
+    text-shadow: 
+        -1px -1px 0 #000,  
+         1px -1px 0 #000,
+        -1px  1px 0 #000,
+         1px  1px 0 #000;
 }
-.modal-content {
-  background-color: var(--note-bg-light);
-  color: var(--text-color-light);
-  margin: 5% auto;
-  padding: 30px;
-  border: 1px solid var(--border-color-light);
-  width: 80%;
-  max-width: 700px;
-  border-radius: 10px;
-  max-height: 80vh;
-  overflow-y: auto;
+/* When a folder is active, the header handles the text color */
+.folder-item.active .folder-name{
+    color: #fff !important; /* Keep white for active state */
+    text-shadow: none; /* Remove shadow when active since background is solid */
 }
-.close-btn {
-  float: right;
-  font-size: 28px;
-  font-weight: bold;
-  cursor: pointer;
-}
-.close-btn:hover { color: #e24a4a; }
+/* END NEW STYLES */
 
-.markdown-preview {
-  border: 1px solid var(--border-color-light);
-  padding: 10px;
-  border-radius: 5px;
-  margin-top: 10px;
-  max-height: 200px;
-  overflow: auto;
-  background-color: var(--note-bg-light);
-}
-
-#view-content {
-  max-height: 60vh;
-  overflow-y: auto;
-  padding: 10px;
-  border: 1px solid var(--border-color-light);
-  border-radius: 5px;
-}
-
-@media (max-width: 768px) {
-  .note-item { grid-template-columns: 1fr; gap: 5px; }
-  .note-actions, .note-view { flex-direction: row; justify-content: flex-end; }
-}
+.folder-actions{display:flex;gap:4px;margin-left:8px}
+.folder-actions button{background:transparent;border:none;color:var(--muted);padding:0 4px;font-size:1.1em;line-height:1;transition:none}
+.folder-item.active .folder-actions button{color:#fff}
+.folder-children{padding-left:16px;display:none;overflow:hidden}
+.folder-item.open > .folder-children{display:block}
+.folder-expand-btn{margin-right:4px;font-size:1.2em;line-height:1;width:1.2em;height:1.2em;text-align:center}
 </style>
 </head>
 <body data-theme="light">
-
-<header class="header">
-  <h1>📝 OuttieTV's Notes WebApp</h1>
-  <div class="control-group">
-    <select id="sort-by">
-      <option value="modified">Sort by Last Modified</option>
-      <option value="title">Sort by Title</option>
-      <option value="created">Sort by Creation Date</option>
-    </select>
-    <button id="add-note-btn">➕ Add Note</button>
-    <button id="settings-btn" title="Settings">⚙️</button>
+<div id="sidebar" class="sidebar">
+  <div class="topbar">
+    <strong>OuttieTV's Notes Webapp</strong>
+    <button id="collapse-btn" class="btn secondary">☰</button>
   </div>
-</header>
 
-<div class="notes-container" id="notes-container">
-  <div class="note-item header-row">
-    <div>NOTE TITLE</div>
-    <div>CREATION DATE</div>
-    <div>EDIT DATE</div>
-    <div>NOTE</div>
-    <div class="note-view">VIEW</div>
-    <div class="note-actions">ACTIONS</div>
+  <button id="all-notes-btn" class="btn secondary" style="width:100%">📂 All Notes</button>
+  <div id="folders-container"></div>
+  
+  <div style="display:flex;gap:8px;margin-top:auto">
+    <button id="add-root-folder-btn" class="btn secondary" style="width:100%">➕ Folder</button>
   </div>
 </div>
 
-<!-- Settings Modal -->
-<div id="settings-modal" class="modal">
-  <div class="modal-content">
-    <span class="close-btn" data-modal="settings-modal">&times;</span>
-    <h2>⚙️ Settings</h2>
-
-    <label for="theme-toggle">Theme:</label>
-    <button id="theme-toggle" style="width:100%;">Toggle Light / Dark</button>
-
-    <label for="timezone-select" style="margin-top:15px;display:block;">Preferred Timezone:</label>
-    <select id="timezone-select" style="width:100%;"></select>
-
-    <hr style="margin:20px 0;">
-
-    <h3>💾 Import / Export Notes</h3>
-    <button id="export-notes-btn" style="width:100%;">⬇️ Export Notes as JSON</button>
-    <input type="file" id="import-file-input" accept="application/json" style="display:none;">
-    <button id="import-notes-btn" style="width:100%;margin-top:10px;">⬆️ Import Notes from JSON</button>
-
-    <button id="save-settings-btn" style="margin-top:20px;width:100%;">Save Settings</button>
+<div class="main">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+    <h2 id="current-folder-title">All Notes</h2>
+    <div>
+      <button id="add-note-btn" class="btn">➕ Add Note</button>
+      <button id="settings-btn" class="btn secondary">⚙️</button>
+    </div>
   </div>
-</div>
 
-<!-- Note Edit Modal -->
-<div id="note-modal" class="modal">
-  <div class="modal-content">
-    <span class="close-btn" data-modal="note-modal">&times;</span>
-    <h2>✏️ Edit Note</h2>
-
-    <label>Title:</label>
-    <input type="text" id="note-title-input" maxlength="100" style="width:100%;">
-    <label>Note Content:</label>
-    <textarea id="note-content-input" rows="8" style="width:100%;"></textarea>
-    <div class="markdown-preview" id="markdown-preview"></div>
-    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
-      <button id="delete-note-btn" style="background:#e24a4a;">🗑️ Delete</button>
-      <button id="save-note-btn">💾 Save Note</button>
+  <div id="notes-container" class="notes-container" style="flex-grow:1;overflow-y:auto;min-height:0">
+    <div class="note-item header">
+      <div>NOTE TITLE</div><div>CREATED</div><div>EDITED</div><div>NOTE</div><div>VIEW</div><div>ACTIONS</div>
     </div>
   </div>
 </div>
 
-<!-- View Note Modal -->
-<div id="view-modal" class="modal">
-  <div class="modal-content">
-    <span class="close-btn" data-modal="view-modal">&times;</span>
-    <h2 id="view-title">👁️ View Note</h2>
-    <div id="view-content" class="markdown-preview"></div>
-    <button id="copy-note-btn" style="margin-top:10px;">📋 Copy to Clipboard</button>
+<div id="settings-modal" class="modal">
+  <div class="modal-card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3>Settings</h3><button class="close-btn btn secondary" data-close="settings-modal">✕</button>
+    </div>
+    
+    <h4 style="margin-top:16px">Display</h4>
+    <label>Theme:</label>
+    <button id="theme-toggle" class="btn secondary" style="width:100%;margin-top:6px">Toggle Theme</button>
+    
+    <label style="margin-top:16px">Time Zone for Dates:</label>
+    <select id="timezone-select" style="width:100%;padding:8px;margin-top:4px"></select>
+
+    <h4 style="margin-top:16px">Data Management</h4>
+    <div style="display:flex;gap:8px">
+        <button id="export-data-btn" class="btn secondary" style="width:100%">⬇️ Export JSON</button>
+        <button id="import-data-btn" class="btn secondary" style="width:100%">⬆️ Import JSON</button>
+    </div>
+    <input type="file" id="import-file-input" accept=".json" style="display:none">
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
+<div id="note-modal" class="modal">
+  <div class="modal-card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3>Edit Note</h3><button class="close-btn btn secondary" data-close="note-modal">✕</button>
+    </div>
+    <label>Title</label>
+    <input id="note-title-input" type="text" style="width:100%;margin-top:4px;padding:8px">
+    <label style="margin-top:10px">Folder</label>
+    <select id="note-folder-select" style="width:100%;padding:8px"></select>
+    <label style="margin-top:10px">Content</label>
+    <textarea id="note-content-input" rows="8" style="width:100%;padding:8px"></textarea>
+    <div id="edit-markdown-preview" class="markdown-preview"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+      <button id="delete-note-btn" class="btn danger">🗑️ Delete</button>
+      <button id="save-note-btn" class="btn success">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="view-modal" class="modal">
+  <div class="modal-card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3 id="view-title">View Note</h3>
+      <div>
+        <button id="copy-note-btn" class="btn secondary">📋 Copy</button>
+        <button class="close-btn btn secondary" data-close="view-modal">✕</button>
+      </div>
+    </div>
+    <div id="view-content" class="markdown-preview" style="max-height:70vh;overflow:auto"></div>
+  </div>
+</div>
+
 <script>
-const NOTES_KEY = 'simpleNotesApp_notes';
-const SETTINGS_KEY = 'simpleNotesApp_settings';
-let notes = [];
-let currentNoteId = null;
-let settings = { theme:'light', timezone:'Local (Browser)' };
+const NOTES_KEY = 'notes_app_v2';
+const FOLDERS_KEY = 'folders_app_v2';
+const TIMEZONE_KEY = 'timezone_app_v2';
+const THEME_KEY = 'theme_app_v2';
 
-// --- Settings ---
-function populateTimezones() {
-  const select = document.getElementById('timezone-select');
-  select.innerHTML = '';
-  const zones = ["Local (Browser)", "UTC"];
-  if (typeof Intl.supportedValuesOf === 'function')
-    zones.push(...Intl.supportedValuesOf('timeZone'));
-  zones.forEach(z=>{
-    const opt = document.createElement('option');
-    opt.value = z;
-    opt.textContent = z;
-    select.appendChild(opt);
-  });
-}
-function loadSettings() {
-  const s = localStorage.getItem(SETTINGS_KEY);
-  if (s) settings = JSON.parse(s);
-  applySettings();
-}
-function saveSettings() {
-  settings.timezone = document.getElementById('timezone-select').value;
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  applySettings();
-  closeModal('settings-modal');
-}
-function toggleTheme() {
-  settings.theme = settings.theme === 'light' ? 'dark' : 'light';
-  saveSettings();
-}
-function applySettings() {
-  document.body.dataset.theme = settings.theme;
-  document.getElementById('timezone-select').value = settings.timezone;
-  renderNotes();
+let notes = []; // Flat array of notes
+let folders = []; // Flat array of folders. Each folder has a `parentId` or `null`
+let activeFolder = null; // ID of the currently selected folder, or null for 'All Notes'
+let timezone = Intl.DateTimeFormat().resolvedOptions().timeZone; // Default to system timezone
+
+// --- Core Data & Storage ---
+
+/** Saves all application data to localStorage. */
+function save() {
+    localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+    localStorage.setItem(FOLDERS_KEY, JSON.stringify(folders));
+    localStorage.setItem(TIMEZONE_KEY, timezone);
+    localStorage.setItem(THEME_KEY, document.body.dataset.theme);
 }
 
-// --- Utility ---
-function formatTimestamp(ts) {
-  if (!ts) return '—';
-  const date = new Date(ts);
-  const tz = settings.timezone;
-  const options = { year:'numeric', month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false };
-  if (tz === 'UTC') options.timeZone = 'UTC';
-  else if (tz !== 'Local (Browser)') options.timeZone = tz;
-  return date.toLocaleString(undefined, options);
+/** Loads all application data from localStorage. */
+function load() {
+    notes = JSON.parse(localStorage.getItem(NOTES_KEY) || '[]');
+    folders = JSON.parse(localStorage.getItem(FOLDERS_KEY) || '[]');
+    timezone = localStorage.getItem(TIMEZONE_KEY) || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const savedTheme = localStorage.getItem(THEME_KEY) || 'light';
+    document.body.dataset.theme = savedTheme;
 }
 
-// --- Notes CRUD ---
-function loadNotes() {
-  notes = JSON.parse(localStorage.getItem(NOTES_KEY) || '[]');
-  renderNotes();
+// --- Utility Functions ---
+
+/** Formats a timestamp into a localized string using the selected timezone. */
+function format(t) {
+    if (!t) return '—';
+    return new Date(t).toLocaleString('default', { timeZone: timezone });
 }
-function saveNotes() {
-  localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
-  renderNotes();
+
+/** Closes a modal by removing its 'open' class. */
+function closeModal(id) {
+    document.getElementById(id).classList.remove('open');
 }
-function createNote() {
-  const now = Date.now();
-  const n = { id: now, title: 'New Note', content: '', createdAt: now, editedAt: null };
-  notes.unshift(n);
-  saveNotes();
-  editNote(n.id);
+
+/** Finds a folder by ID. */
+function findFolder(id) {
+    return folders.find(f => f.id === id);
 }
-function editNote(id) {
-  const n = notes.find(x=>x.id===id); if (!n) return;
-  currentNoteId = id;
-  document.getElementById('note-title-input').value = n.title;
-  document.getElementById('note-content-input').value = n.content;
-  updateMarkdownPreview(n.content);
-  openModal('note-modal');
+
+// --- Folder Management & Rendering (Recursive) ---
+
+/**
+ * Builds the hierarchical folder structure from the flat list.
+ * @param {string | null} parentId - The parent ID to filter by (null for root).
+ * @returns {Array<Object>} Hierarchical array of folder objects.
+ */
+function buildFolderTree(parentId = null) {
+    const children = folders.filter(f => (f.parentId || null) === parentId);
+    return children.map(folder => ({
+        ...folder,
+        children: buildFolderTree(folder.id)
+    })).sort((a, b) => a.name.localeCompare(b.name));
 }
-function viewNote(id) {
-  const n = notes.find(x=>x.id===id); if (!n) return;
-  document.getElementById('view-title').innerText = `👁️ ${n.title}`;
-  document.getElementById('view-content').innerHTML = marked.parse(n.content || '');
-  openModal('view-modal');
-  document.getElementById('copy-note-btn').onclick = () => {
-    navigator.clipboard.writeText(n.content || '').then(()=>{
-      alert("Note content copied to clipboard!");
+
+/**
+ * Renders the folder tree recursively into the sidebar.
+ * @param {Array<Object>} tree - The hierarchical folder structure.
+ * @param {HTMLElement} container - The element to render into.
+ */
+function renderFolderTreeRecursive(tree, container) {
+    tree.forEach(folder => {
+        const item = document.createElement('div');
+        item.className = 'folder-item';
+        if (folder.id === activeFolder) {
+            item.classList.add('active');
+        }
+
+        const header = document.createElement('div');
+        header.className = 'folder-header';
+        
+        // Expansion Button
+        const expandBtn = document.createElement('button');
+        expandBtn.className = 'folder-expand-btn btn secondary';
+        expandBtn.innerHTML = '▶'; // Right triangle
+        expandBtn.style.visibility = folder.children.length > 0 ? 'visible' : 'hidden';
+        expandBtn.onclick = (e) => {
+            e.stopPropagation();
+            item.classList.toggle('open');
+            expandBtn.innerHTML = item.classList.contains('open') ? '▼' : '▶';
+        };
+        header.appendChild(expandBtn);
+
+        // Name and Wrapper
+        const nameWrapper = document.createElement('div');
+        nameWrapper.className = 'folder-name-wrapper';
+
+        // Apply folder color as background to the wrapper for visual cue
+        nameWrapper.style.backgroundColor = folder.color || 'var(--accent)';
+        nameWrapper.style.padding = '4px 8px';
+        nameWrapper.style.borderRadius = '4px';
+        nameWrapper.style.display = 'inline-block';
+        nameWrapper.style.maxWidth = '100%';
+
+        // Folder Name Element
+        const folderName = document.createElement('strong');
+        folderName.className = 'folder-name';
+        folderName.textContent = folder.name;
+        nameWrapper.appendChild(folderName);
+
+        nameWrapper.onclick = (e) => {
+            e.stopPropagation();
+            setActiveFolder(folder.id);
+        };
+        header.appendChild(nameWrapper);
+
+        // Actions
+        const actions = document.createElement('div');
+        actions.className = 'folder-actions';
+
+        // Add Subfolder Button
+        const addSubBtn = document.createElement('button');
+        addSubBtn.title = 'Add Subfolder';
+        addSubBtn.innerHTML = '➕';
+        addSubBtn.onclick = (e) => {
+            e.stopPropagation();
+            addFolder(folder.id);
+        };
+        actions.appendChild(addSubBtn);
+
+        // Rename Button
+        const renameBtn = document.createElement('button');
+        renameBtn.title = 'Rename Folder';
+        renameBtn.innerHTML = '✏️';
+        renameBtn.onclick = (e) => {
+            e.stopPropagation();
+            renameFolder(folder.id);
+        };
+        actions.appendChild(renameBtn);
+
+        // Delete Button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.title = 'Delete Folder';
+        deleteBtn.innerHTML = '🗑️';
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteFolder(folder.id);
+        };
+        actions.appendChild(deleteBtn);
+
+        header.appendChild(actions);
+        item.appendChild(header);
+        
+        // Apply background color to header when not active to use the visual color
+        if (folder.id !== activeFolder) {
+            header.style.backgroundColor = folder.color || 'var(--accent)';
+            // Remove specific wrapper styling since header handles it now for better visual grouping
+            nameWrapper.style.backgroundColor = '';
+            nameWrapper.style.padding = '0';
+            nameWrapper.style.borderRadius = '0';
+        } else {
+             // Reset header background when active since .active styles take over
+            header.style.backgroundColor = '';
+            // But keep the nameWrapper visual cue for padding
+            nameWrapper.style.backgroundColor = folder.color || 'var(--accent)';
+            nameWrapper.style.padding = '4px 8px';
+            nameWrapper.style.borderRadius = '4px';
+            
+            // Set nameWrapper to full width when active
+            nameWrapper.style.flexGrow = '1';
+        }
+
+
+        // Children Container
+        if (folder.children.length > 0) {
+            const childrenContainer = document.createElement('div');
+            childrenContainer.className = 'folder-children';
+            renderFolderTreeRecursive(folder.children, childrenContainer);
+            item.appendChild(childrenContainer);
+        }
+
+        container.appendChild(item);
     });
-  };
-}
-function saveNote() {
-  const idx = notes.findIndex(x=>x.id===currentNoteId);
-  if (idx===-1) return;
-  const note = notes[idx];
-  const newTitle = document.getElementById('note-title-input').value.trim() || 'Untitled Note';
-  const newContent = document.getElementById('note-content-input').value.trim();
-  const changed = newTitle !== note.title || newContent !== note.content;
-  note.title = newTitle;
-  note.content = newContent;
-  if (changed && (note.editedAt !== null || note.content !== '' && note.title !== 'New Note'))
-    note.editedAt = Date.now();
-  saveNotes();
-  closeModal('note-modal');
-  currentNoteId = null;
-}
-function deleteNote() {
-  if (!confirm('Delete this note?')) return;
-  notes = notes.filter(n=>n.id!==currentNoteId);
-  saveNotes();
-  closeModal('note-modal');
-  currentNoteId=null;
 }
 
-// --- Markdown Preview ---
-function updateMarkdownPreview(md) {
-  const preview = document.getElementById('markdown-preview');
-  preview.innerHTML = marked.parse(md || '');
+/** Renders the full folder tree in the sidebar and updates the 'All Notes' button state. */
+function renderFolders() {
+    const fContainer = document.getElementById('folders-container');
+    fContainer.innerHTML = '';
+    const tree = buildFolderTree();
+    renderFolderTreeRecursive(tree, fContainer);
+    
+    // Update 'All Notes' button style
+    const allNotesBtn = document.getElementById('all-notes-btn');
+    
+    // Reset styles
+    allNotesBtn.classList.add('secondary');
+    allNotesBtn.style.background = '';
+    allNotesBtn.style.color = 'var(--text)';
+    
+    if (activeFolder === null) {
+        allNotesBtn.style.background = 'var(--accent)';
+        allNotesBtn.style.color = '#fff';
+    }
+
+    updateFolderTitle();
+    populateFolderSelect();
 }
 
-// --- Import / Export ---
-function exportNotes() {
-  const blob = new Blob([JSON.stringify(notes, null, 2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'notes-export.json';
-  a.click();
-  URL.revokeObjectURL(url);
-}
-function importNotes(file) {
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const imported = JSON.parse(e.target.result);
-      if (Array.isArray(imported)) {
-        notes = imported;
-        saveNotes();
-        alert("✅ Notes imported successfully!");
-      } else alert("❌ Invalid JSON format.");
-    } catch { alert("❌ Failed to parse JSON."); }
-  };
-  reader.readAsText(file);
+/** Sets the active folder and triggers UI updates. */
+function setActiveFolder(folderId) {
+    activeFolder = folderId;
+    save(); // Save activeFolder state
+    renderFolders();
+    renderNotes();
 }
 
-// --- Render ---
-function sortNotes(a,b){
-  const key=document.getElementById('sort-by').value;
-  if(key==='title') return a.title.localeCompare(b.title);
-  if(key==='created') return b.createdAt - a.createdAt;
-  return (b.editedAt||b.createdAt)-(a.editedAt||a.createdAt);
+/** Updates the main content header to show the current folder name. */
+function updateFolderTitle() {
+    const title = activeFolder ? (findFolder(activeFolder)?.name || 'Folder Not Found') : 'All Notes';
+    document.getElementById('current-folder-title').textContent = title;
 }
+
+/** Adds a new folder (or subfolder). */
+function addFolder(parentId = null) {
+    const name = prompt('Enter folder name:');
+    if (!name) return;
+    const color = prompt('Enter folder color (hex or name), leave blank for default:', '#4a90e2') || '#4a90e2';
+    const newFolder = { id: Date.now().toString(), name: name.trim(), color, parentId };
+    folders.push(newFolder);
+    save();
+    renderFolders();
+    // If it's a new root folder, set it as active
+    if (parentId === null) {
+        setActiveFolder(newFolder.id);
+    }
+}
+
+/** Renames a folder. */
+function renameFolder(id) {
+    const folder = findFolder(id);
+    if (!folder) return;
+    const newName = prompt('Rename folder:', folder.name);
+    if (newName && newName.trim() !== folder.name) {
+        folder.name = newName.trim();
+        save();
+        renderFolders();
+    }
+}
+
+/** Deletes a folder and recursively handles its subfolders and notes. */
+function deleteFolder(id) {
+    const folder = findFolder(id);
+    if (!folder) return;
+
+    if (!confirm(`Are you sure you want to delete the folder "${folder.name}" and ALL its contents (subfolders and notes)?`)) return;
+
+    // Recursive function to get all descendant folder IDs
+    const getDescendantIds = (parentId) => {
+        const children = folders.filter(f => f.parentId === parentId);
+        let ids = children.map(f => f.id);
+        children.forEach(f => {
+            ids = ids.concat(getDescendantIds(f.id));
+        });
+        return ids;
+    };
+
+    const idsToDelete = [id].concat(getDescendantIds(id));
+    
+    // 1. Delete all notes inside these folders
+    notes = notes.filter(n => !idsToDelete.includes(n.folder));
+
+    // 2. Delete all folders
+    folders = folders.filter(f => !idsToDelete.includes(f.id));
+
+    // 3. Reset active folder if the deleted folder was active
+    if (activeFolder && idsToDelete.includes(activeFolder)) {
+        activeFolder = null;
+    }
+
+    save();
+    renderFolders();
+    renderNotes();
+}
+
+// --- Note List Rendering ---
+
+/** Renders the list of notes for the current active folder. */
 function renderNotes() {
-  const c=document.getElementById('notes-container');
-  while(c.children.length>1)c.removeChild(c.lastChild);
-  [...notes].sort(sortNotes).forEach(n=>{
-    const d=document.createElement('div');d.className='note-item';
-    const contentHTML = marked.parse(n.content.length>500?n.content.slice(0,500)+'...':n.content);
-    d.innerHTML=`
-      <div>${n.title}</div>
-      <div>${formatTimestamp(n.createdAt)}</div>
-      <div>${formatTimestamp(n.editedAt)}</div>
-      <div class="note-body">${contentHTML}</div>
-      <div class="note-view"><button onclick="event.stopPropagation();viewNote(${n.id})">👁️</button></div>
-      <div class="note-actions"><button onclick="event.stopPropagation();editNote(${n.id})">⚙️</button></div>`;
-    c.appendChild(d);
-  });
-  if(!notes.length)c.innerHTML+='<p style="text-align:center;margin-top:50px;">Click "➕ Add Note" to create your first note!</p>';
+    const c = document.getElementById('notes-container');
+    // Clear all notes (keep the header)
+    while (c.children.length > 1) c.removeChild(c.lastChild);
+
+    let filtered = [];
+    if (activeFolder === null) {
+        // All Notes: All notes in the system, sorted by edited date
+        filtered = notes.slice().sort((a, b) => (b.editedAt || b.createdAt) - (a.editedAt || a.createdAt));
+
+    } else {
+        // Find all notes in the active folder AND its subfolders (recursive view)
+        const activeFolderAndDescendants = [activeFolder].concat(getDescendantIds(activeFolder));
+        filtered = notes.filter(n => activeFolderAndDescendants.includes(n.folder))
+                        .sort((a, b) => (b.editedAt || b.createdAt) - (a.editedAt || a.createdAt));
+    }
+    
+    if (filtered.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.textAlign = 'center';
+        empty.style.padding = '20px';
+        empty.style.color = 'var(--muted)';
+        empty.textContent = activeFolder ? 'This folder is empty. Create a new note!' : 'No notes found. Create your first note!';
+        c.appendChild(empty);
+    }
+
+    filtered.forEach(n => {
+        const d = document.createElement('div');
+        d.className = 'note-item';
+        // Note: marked.parse returns HTML string
+        const previewText = n.content ? marked.parse(n.content.slice(0, 300)) : '<em>No content...</em>';
+        d.innerHTML = `
+            <div><strong>${n.title}</strong></div>
+            <div>${format(n.createdAt)}</div>
+            <div>${format(n.editedAt)}</div>
+            <div class="note-body">${previewText}</div>
+            <div><button class="btn secondary view-btn" title="View Note">👁️</button></div>
+            <div><button class="btn edit-btn" title="Edit Note">⚙️</button></div>
+        `;
+        
+        // Event handlers
+        d.querySelector('.view-btn').onclick = e => { e.stopPropagation(); openView(n.id); };
+        d.querySelector('.edit-btn').onclick = e => { e.stopPropagation(); openEdit(n.id); };
+        d.onclick = () => openEdit(n.id);
+        
+        c.appendChild(d);
+    });
 }
 
-// --- Modal helpers ---
-function openModal(id){document.getElementById(id).style.display='block';}
-function closeModal(id){document.getElementById(id).style.display='none';}
+/** Helper for renderNotes recursive filtering */
+const getDescendantIds = (parentId) => {
+    const children = folders.filter(f => f.parentId === parentId);
+    let ids = children.map(f => f.id);
+    children.forEach(f => {
+        ids = ids.concat(getDescendantIds(f.id));
+    });
+    return ids;
+};
 
-// --- Init ---
-document.addEventListener('DOMContentLoaded',()=>{
-  populateTimezones();
-  loadSettings();
-  loadNotes();
-  document.getElementById('add-note-btn').onclick=createNote;
-  document.getElementById('save-note-btn').onclick=saveNote;
-  document.getElementById('delete-note-btn').onclick=deleteNote;
-  document.getElementById('settings-btn').onclick=()=>openModal('settings-modal');
-  document.getElementById('save-settings-btn').onclick=saveSettings;
-  document.getElementById('theme-toggle').onclick=toggleTheme;
-  document.getElementById('sort-by').onchange=renderNotes;
-  document.getElementById('export-notes-btn').onclick=exportNotes;
-  document.getElementById('import-notes-btn').onclick=()=>document.getElementById('import-file-input').click();
-  document.getElementById('import-file-input').addEventListener('change',e=>{
-    if(e.target.files.length>0) importNotes(e.target.files[0]);
-  });
-  document.querySelectorAll('.close-btn').forEach(b=>b.onclick=e=>closeModal(e.target.dataset.modal));
-  window.onclick=e=>{if(e.target.classList.contains('modal'))e.target.style.display='none';};
-  document.getElementById('note-content-input').addEventListener('input',e=>updateMarkdownPreview(e.target.value));
-});
+// --- Note Editor & View Modals ---
+
+/**
+ * Builds a folder selection dropdown recursively.
+ * @param {Array<Object>} tree - The hierarchical folder structure.
+ * @param {number} level - Current nesting level (for indentation).
+ * @param {Array<string>} options - Array of HTML option strings to push to.
+ */
+function buildFolderSelectOptions(tree, level, options) {
+    const prefix = '— '.repeat(level);
+    tree.forEach(folder => {
+        options.push(`<option value="${folder.id}">${prefix}${folder.name}</option>`);
+        if (folder.children.length > 0) {
+            buildFolderSelectOptions(folder.children, level + 1, options);
+        }
+    });
+}
+
+/** Populates the folder selection dropdown in the note editor modal. */
+function populateFolderSelect() {
+    const sel = document.getElementById('note-folder-select');
+    let options = ['<option value="">(No Folder)</option>'];
+    const tree = buildFolderTree();
+    buildFolderSelectOptions(tree, 0, options);
+    sel.innerHTML = options.join('');
+}
+
+/** Creates a new note in the active folder. */
+function addNote() {
+    const now = Date.now();
+    // If activeFolder is null, the note will be root. Otherwise, it goes in the active folder.
+    const note = { id: now.toString(), title: 'New Note', content: '', createdAt: now, editedAt: null, folder: activeFolder };
+    notes.unshift(note);
+    save();
+    renderNotes();
+    openEdit(note.id);
+}
+
+/** Opens the note editor modal. */
+function openEdit(id) {
+    const n = notes.find(x => x.id === id);
+    if (!n) return;
+    
+    populateFolderSelect(); // Re-populate folder list on every open to include new folders
+    const modal = document.getElementById('note-modal');
+    
+    document.getElementById('note-title-input').value = n.title;
+    document.getElementById('note-content-input').value = n.content;
+    document.getElementById('note-folder-select').value = n.folder || '';
+    
+    updatePreview(n.content);
+
+    document.getElementById('save-note-btn').onclick = () => saveNote(n.id);
+    document.getElementById('delete-note-btn').onclick = () => {
+        if (confirm('Permanently delete this note?')) {
+            notes = notes.filter(a => a.id !== n.id);
+            save();
+            closeModal('note-modal');
+            renderNotes();
+        }
+    };
+    
+    modal.classList.add('open');
+}
+
+/** Saves the changes from the note editor modal. */
+function saveNote(id) {
+    const n = notes.find(x => x.id === id);
+    if (!n) return;
+
+    const title = document.getElementById('note-title-input').value.trim() || 'Untitled';
+    const content = document.getElementById('note-content-input').value;
+    const folder = document.getElementById('note-folder-select').value || null;
+
+    const titleChanged = title !== n.title;
+    const contentChanged = content !== n.content;
+
+    n.title = title;
+    n.content = content;
+    n.folder = folder;
+
+    // Update editedAt if content/title changed OR if it's the initial save of a 'New Note' with content
+    if (titleChanged || contentChanged) {
+        // Only set editedAt if it's not the initial creation/save of a blank 'New Note'
+        if (n.editedAt || n.title !== 'New Note' || n.content !== '') {
+             n.editedAt = Date.now();
+        }
+    }
+
+    save();
+    renderNotes();
+    closeModal('note-modal');
+}
+
+/** Updates the live markdown preview in the editor. */
+function updatePreview(md) {
+    // Escape any <script> tags when parsing for safety, though this is a local app
+    document.getElementById('edit-markdown-preview').innerHTML = marked.parse(md || '');
+}
+
+/** Opens the view note modal. */
+function openView(id) {
+    const n = notes.find(x => x.id === id);
+    if (!n) return;
+    
+    document.getElementById('view-title').textContent = n.title;
+    document.getElementById('view-content').innerHTML = marked.parse(n.content || '');
+    document.getElementById('view-modal').classList.add('open');
+    
+    document.getElementById('copy-note-btn').onclick = () => {
+        navigator.clipboard.writeText(n.content || '');
+        alert('Note content copied to clipboard!');
+    };
+}
+
+// --- Settings and Import/Export ---
+
+/** Populates the timezone selector in the settings modal. */
+function populateTimezoneSelect() {
+    const sel = document.getElementById('timezone-select');
+    try {
+        const timeZones = Intl.supportedValuesOf('timeZone');
+        const options = timeZones.map(tz => `<option value="${tz}" ${tz === timezone ? 'selected' : ''}>${tz}</option>`);
+        sel.innerHTML = options.join('');
+        sel.onchange = (e) => {
+            timezone = e.target.value;
+            save();
+            renderNotes(); // Re-render notes to update dates
+        };
+    } catch (e) {
+        // Fallback for browsers that don't support Intl.supportedValuesOf('timeZone')
+        sel.innerHTML = `<option value="${timezone}">${timezone} (System Default)</option><option value="UTC">UTC</option>`;
+        console.error("Timezone selection feature not fully supported by the browser.", e);
+    }
+}
+
+/** Exports all application data as a JSON file. */
+function exportData() {
+    const data = {
+        folders: folders,
+        notes: notes,
+        theme: document.body.dataset.theme,
+        timezone: timezone,
+        version: 2 // Version identifier for import compatibility
+    };
+    
+    const jsonString = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `markdown-notes-export-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+/** Triggers the file selection for data import. */
+function triggerImport() {
+    document.getElementById('import-file-input').click();
+}
+
+/** Handles the file upload and imports data. */
+function handleImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+            if (!data.folders || !data.notes) {
+                alert('Invalid file format. Missing "folders" or "notes" data.');
+                return;
+            }
+
+            const confirmReplace = confirm("Importing data will REPLACE your existing notes and folders. Are you sure you want to proceed?");
+
+            if (confirmReplace) {
+                // Clear existing data and set new data
+                notes = data.notes;
+                folders = data.folders;
+                
+                // Load settings if available
+                if (data.theme) document.body.dataset.theme = data.theme;
+                if (data.timezone) timezone = data.timezone;
+                
+                activeFolder = null; // Reset active folder on import
+                
+                save();
+                load(); // Re-load to ensure consistency
+                renderFolders();
+                renderNotes();
+                populateTimezoneSelect();
+                alert('Data successfully imported!');
+                closeModal('settings-modal');
+            }
+        } catch (error) {
+            alert('Error processing file. Please ensure it is a valid JSON export file.');
+            console.error('Import error:', error);
+        }
+    };
+    reader.readAsText(file);
+    // Clear the file input so the same file can be imported again
+    event.target.value = ''; 
+}
+
+// --- Event Listeners and Initialization ---
+
+// Editor Listeners
+document.getElementById('note-content-input').addEventListener('input', e => updatePreview(e.target.value));
+document.querySelectorAll('.close-btn').forEach(b => b.onclick = e => closeModal(e.target.dataset.close));
+
+// Top Bar Listeners
+document.getElementById('add-note-btn').onclick = addNote;
+document.getElementById('all-notes-btn').onclick = () => setActiveFolder(null);
+
+// Settings Listeners
+document.getElementById('settings-btn').onclick = () => document.getElementById('settings-modal').classList.add('open');
+document.getElementById('theme-toggle').onclick = () => {
+    document.body.dataset.theme = document.body.dataset.theme === 'dark' ? 'light' : 'dark';
+    save();
+};
+document.getElementById('export-data-btn').onclick = exportData;
+document.getElementById('import-data-btn').onclick = triggerImport;
+document.getElementById('import-file-input').onchange = handleImport;
+
+// Folder Listeners
+document.getElementById('add-root-folder-btn').onclick = () => addFolder(null);
+
+// Sidebar Collapse Listener
+document.getElementById('collapse-btn').onclick = () => document.getElementById('sidebar').classList.toggle('collapsed');
+
+// Initial setup
+load();
+populateTimezoneSelect();
+renderFolders();
+renderNotes();
 </script>
 </body>
 </html>
