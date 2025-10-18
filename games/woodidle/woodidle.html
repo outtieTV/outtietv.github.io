@@ -315,23 +315,22 @@
         // --- Game Data Models ---
 
         // Define tree properties. Added 'sprite' property for file name handling.
-        const TREES = {
-            regular: { name: 'Regular', requiredLevel: 1, baseTime: 3000, xp: 25, sprite: 'regular-tree.png' },
-            oak:     { name: 'Oak',     requiredLevel: 15, baseTime: 4500, xp: 35, sprite: 'oak-tree.png' },
-            willow:  { name: 'Willow',  requiredLevel: 30, baseTime: 6000, xp: 50, sprite: 'willow-tree.png' },
-            yew:     { name: 'Yew',     requiredLevel: 60, baseTime: 8000, xp: 70, sprite: 'yew-tree.png' },
-            redwood: { name: 'Redwood', requiredLevel: 90, baseTime: 12000, xp: 100, sprite: 'redwood-tree.png' }
-        };
+		const TREES = {
+		regular: { name: 'Regular', requiredLevel: 1,  baseTime: 3000, xp: 25 * 5,  sprite: 'regular-tree.png' },
+		oak:     { name: 'Oak',     requiredLevel: 15, baseTime: 4500, xp: 35 * 5,  sprite: 'oak-tree.png' },
+		willow:  { name: 'Willow',  requiredLevel: 30, baseTime: 6000, xp: 50 * 5,  sprite: 'willow-tree.png' },
+		yew:     { name: 'Yew',     requiredLevel: 60, baseTime: 8000, xp: 70 * 5,  sprite: 'yew-tree.png' },
+		redwood: { name: 'Redwood', requiredLevel: 90, baseTime: 12000,xp: 100 * 5, sprite: 'redwood-tree.png' }
+		};
 
-        // Define axe properties
-        const AXES = [
-            { name: 'Stone Axe',    requiredLevel: 1, speedBoost: 0.00 },
-            { name: 'Bronze Axe',   requiredLevel: 10, speedBoost: 0.10 },
-            { name: 'Iron Axe',     requiredLevel: 25, speedBoost: 0.20 },
-            { name: 'Steel Axe',    requiredLevel: 45, speedBoost: 0.35 },
-            { name: 'Diamond Axe',  requiredLevel: 70, speedBoost: 0.50 },
-            { name: 'Ultimate Axe', requiredLevel: 95, speedBoost: 0.65 }
-        ];
+		const AXES = [
+		{ name: 'Stone Axe',    requiredLevel: 1,  speedBoost: 0.00 },
+		{ name: 'Bronze Axe',   requiredLevel: 10, speedBoost: 0.10 },
+		{ name: 'Iron Axe',     requiredLevel: 25, speedBoost: 0.25 },
+		{ name: 'Steel Axe',    requiredLevel: 45, speedBoost: 0.45 },
+		{ name: 'Diamond Axe',  requiredLevel: 70, speedBoost: 0.80 },
+		{ name: 'Ultimate Axe', requiredLevel: 95, speedBoost: 0.95 }
+		];
 
         // Base path for the sprites folder
         const SPRITE_PATH = 'sprites/';
@@ -637,4 +636,5 @@
         setInterval(saveGame, 10000);
     </script>
 </body>
+
 </html>
