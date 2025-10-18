@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simple Notes WebApp (Markdown)</title>
+<title>OuttieTV's Notes WebApp</title>
 <style>
 :root {
   --bg-color-light: #f5f5f5;
@@ -76,7 +76,7 @@ button:hover { opacity: 0.9; }
 }
 .note-item {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 3fr 100px;
+  grid-template-columns: 2fr 1fr 1fr 3fr 80px 80px;
   align-items: start;
   gap: 15px;
   padding: 15px;
@@ -88,12 +88,10 @@ button:hover { opacity: 0.9; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.note-actions {
-  grid-column: 5 / span 1;
+.note-actions, .note-view {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 5px;
   flex-direction: row;
   writing-mode: horizontal-tb !important;
   text-orientation: mixed !important;
@@ -122,8 +120,10 @@ button:hover { opacity: 0.9; }
   padding: 30px;
   border: 1px solid var(--border-color-light);
   width: 80%;
-  max-width: 500px;
+  max-width: 700px;
   border-radius: 10px;
+  max-height: 80vh;
+  overflow-y: auto;
 }
 .close-btn {
   float: right;
@@ -143,16 +143,24 @@ button:hover { opacity: 0.9; }
   background-color: var(--note-bg-light);
 }
 
+#view-content {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid var(--border-color-light);
+  border-radius: 5px;
+}
+
 @media (max-width: 768px) {
   .note-item { grid-template-columns: 1fr; gap: 5px; }
-  .note-actions { flex-direction: row; justify-content: flex-end; }
+  .note-actions, .note-view { flex-direction: row; justify-content: flex-end; }
 }
 </style>
 </head>
 <body data-theme="light">
 
 <header class="header">
-  <h1>📝 Local Notes (Markdown)</h1>
+  <h1>📝 OuttieTV's Notes WebApp</h1>
   <div class="control-group">
     <select id="sort-by">
       <option value="modified">Sort by Last Modified</option>
@@ -169,7 +177,8 @@ button:hover { opacity: 0.9; }
     <div>NOTE TITLE</div>
     <div>CREATION DATE</div>
     <div>EDIT DATE</div>
-    <div>NOTE (Markdown View)</div>
+    <div>NOTE</div>
+    <div class="note-view">VIEW</div>
     <div class="note-actions">ACTIONS</div>
   </div>
 </div>
@@ -186,27 +195,42 @@ button:hover { opacity: 0.9; }
     <label for="timezone-select" style="margin-top:15px;display:block;">Preferred Timezone:</label>
     <select id="timezone-select" style="width:100%;"></select>
 
+    <hr style="margin:20px 0;">
+
+    <h3>💾 Import / Export Notes</h3>
+    <button id="export-notes-btn" style="width:100%;">⬇️ Export Notes as JSON</button>
+    <input type="file" id="import-file-input" accept="application/json" style="display:none;">
+    <button id="import-notes-btn" style="width:100%;margin-top:10px;">⬆️ Import Notes from JSON</button>
+
     <button id="save-settings-btn" style="margin-top:20px;width:100%;">Save Settings</button>
   </div>
 </div>
 
-<!-- Note Modal -->
+<!-- Note Edit Modal -->
 <div id="note-modal" class="modal">
   <div class="modal-content">
     <span class="close-btn" data-modal="note-modal">&times;</span>
-    <h2>✏️ Edit Note (Markdown Supported)</h2>
+    <h2>✏️ Edit Note</h2>
 
     <label>Title:</label>
     <input type="text" id="note-title-input" maxlength="100" style="width:100%;">
-    <label>Note Content (Markdown):</label>
+    <label>Note Content:</label>
     <textarea id="note-content-input" rows="8" style="width:100%;"></textarea>
-
     <div class="markdown-preview" id="markdown-preview"></div>
-
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
       <button id="delete-note-btn" style="background:#e24a4a;">🗑️ Delete</button>
       <button id="save-note-btn">💾 Save Note</button>
     </div>
+  </div>
+</div>
+
+<!-- View Note Modal -->
+<div id="view-modal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" data-modal="view-modal">&times;</span>
+    <h2 id="view-title">👁️ View Note</h2>
+    <div id="view-content" class="markdown-preview"></div>
+    <button id="copy-note-btn" style="margin-top:10px;">📋 Copy to Clipboard</button>
   </div>
 </div>
 
@@ -288,6 +312,17 @@ function editNote(id) {
   updateMarkdownPreview(n.content);
   openModal('note-modal');
 }
+function viewNote(id) {
+  const n = notes.find(x=>x.id===id); if (!n) return;
+  document.getElementById('view-title').innerText = `👁️ ${n.title}`;
+  document.getElementById('view-content').innerHTML = marked.parse(n.content || '');
+  openModal('view-modal');
+  document.getElementById('copy-note-btn').onclick = () => {
+    navigator.clipboard.writeText(n.content || '').then(()=>{
+      alert("Note content copied to clipboard!");
+    });
+  };
+}
 function saveNote() {
   const idx = notes.findIndex(x=>x.id===currentNoteId);
   if (idx===-1) return;
@@ -317,6 +352,31 @@ function updateMarkdownPreview(md) {
   preview.innerHTML = marked.parse(md || '');
 }
 
+// --- Import / Export ---
+function exportNotes() {
+  const blob = new Blob([JSON.stringify(notes, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'notes-export.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+function importNotes(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (Array.isArray(imported)) {
+        notes = imported;
+        saveNotes();
+        alert("✅ Notes imported successfully!");
+      } else alert("❌ Invalid JSON format.");
+    } catch { alert("❌ Failed to parse JSON."); }
+  };
+  reader.readAsText(file);
+}
+
 // --- Render ---
 function sortNotes(a,b){
   const key=document.getElementById('sort-by').value;
@@ -328,13 +388,14 @@ function renderNotes() {
   const c=document.getElementById('notes-container');
   while(c.children.length>1)c.removeChild(c.lastChild);
   [...notes].sort(sortNotes).forEach(n=>{
-    const d=document.createElement('div');d.className='note-item';d.onclick=()=>editNote(n.id);
+    const d=document.createElement('div');d.className='note-item';
     const contentHTML = marked.parse(n.content.length>500?n.content.slice(0,500)+'...':n.content);
     d.innerHTML=`
       <div>${n.title}</div>
       <div>${formatTimestamp(n.createdAt)}</div>
       <div>${formatTimestamp(n.editedAt)}</div>
       <div class="note-body">${contentHTML}</div>
+      <div class="note-view"><button onclick="event.stopPropagation();viewNote(${n.id})">👁️</button></div>
       <div class="note-actions"><button onclick="event.stopPropagation();editNote(${n.id})">⚙️</button></div>`;
     c.appendChild(d);
   });
@@ -357,6 +418,11 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('save-settings-btn').onclick=saveSettings;
   document.getElementById('theme-toggle').onclick=toggleTheme;
   document.getElementById('sort-by').onchange=renderNotes;
+  document.getElementById('export-notes-btn').onclick=exportNotes;
+  document.getElementById('import-notes-btn').onclick=()=>document.getElementById('import-file-input').click();
+  document.getElementById('import-file-input').addEventListener('change',e=>{
+    if(e.target.files.length>0) importNotes(e.target.files[0]);
+  });
   document.querySelectorAll('.close-btn').forEach(b=>b.onclick=e=>closeModal(e.target.dataset.modal));
   window.onclick=e=>{if(e.target.classList.contains('modal'))e.target.style.display='none';};
   document.getElementById('note-content-input').addEventListener('input',e=>updateMarkdownPreview(e.target.value));
