@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simple Notes WebApp</title>
+<style>
+:root {
+  --bg-color-light: #f5f5f5;
+  --text-color-light: #1c1c1c;
+  --note-bg-light: #ffffff;
+  --header-bg-light: #e0e0e0;
+  --border-color-light: #cccccc;
+  --button-bg-light: #4a90e2;
+  --button-text-light: #ffffff;
+}
+[data-theme="dark"] {
+  --bg-color-light: #1c1c1c;
+  --text-color-light: #f5f5f5;
+  --note-bg-light: #2c2c2c;
+  --header-bg-light: #3a3a3a;
+  --border-color-light: #444444;
+  --button-bg-light: #89cff0;
+  --button-text-light: #1c1c1c;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--bg-color-light);
+  color: var(--text-color-light);
+  transition: background-color 0.3s, color 0.3s;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border-color-light);
+  background-color: var(--header-bg-light);
+  border-radius: 8px;
+}
+.header h1 { font-size: 1.8em; }
+
+.control-group {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+button, select {
+  padding: 10px 15px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1em;
+}
+button { background-color: var(--button-bg-light); color: var(--button-text-light); }
+select {
+  background-color: var(--note-bg-light);
+  color: var(--text-color-light);
+  border: 1px solid var(--border-color-light);
+}
+button:hover { opacity: 0.9; }
+
+.notes-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  max-width: 1200px;
+  margin: 20px auto;
+}
+.note-item {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 3fr 100px;
+  align-items: start;
+  gap: 15px;
+  padding: 15px;
+  background-color: var(--note-bg-light);
+  border: 1px solid var(--border-color-light);
+  border-radius: 8px;
+}
+.note-actions {
+  grid-column: 5 / span 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  flex-direction: row;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+}
+.notes-container .note-item:first-child {
+  background-color: var(--header-bg-light);
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.note-item:not(:first-child):hover { background-color: var(--header-bg-light); }
+
+.modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 100;
+  padding-top: 60px;
+}
+.modal-content {
+  background-color: var(--note-bg-light);
+  color: var(--text-color-light);
+  margin: 5% auto;
+  padding: 30px;
+  border: 1px solid var(--border-color-light);
+  width: 80%;
+  max-width: 500px;
+  border-radius: 10px;
+}
+.close-btn {
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.close-btn:hover { color: #e24a4a; }
+
+@media (max-width: 768px) {
+  .note-item { grid-template-columns: 1fr; gap: 5px; }
+  .note-actions { flex-direction: row; justify-content: flex-end; }
+}
+</style>
+</head>
+<body data-theme="light">
+
+<header class="header">
+  <h1>📝 Local Notes</h1>
+  <div class="control-group">
+    <select id="sort-by">
+      <option value="modified">Sort by Last Modified</option>
+      <option value="title">Sort by Title</option>
+      <option value="created">Sort by Creation Date</option>
+    </select>
+    <button id="add-note-btn">➕ Add Note</button>
+    <button id="settings-btn" title="Settings">⚙️</button>
+  </div>
+</header>
+
+<div class="notes-container" id="notes-container">
+  <div class="note-item header-row">
+    <div>NOTE TITLE</div>
+    <div>CREATION DATE</div>
+    <div>EDIT DATE</div>
+    <div>NOTE</div>
+    <div class="note-actions">ACTIONS</div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settings-modal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" data-modal="settings-modal">&times;</span>
+    <h2>⚙️ Settings</h2>
+
+    <label for="theme-toggle">Theme:</label>
+    <button id="theme-toggle" style="width:100%;">Toggle Light / Dark</button>
+
+    <label for="timezone-select" style="margin-top:15px;display:block;">Preferred Timezone:</label>
+    <select id="timezone-select" style="width:100%;"></select>
+
+    <button id="save-settings-btn" style="margin-top:20px;width:100%;">Save Settings</button>
+  </div>
+</div>
+
+<!-- Note Modal -->
+<div id="note-modal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" data-modal="note-modal">&times;</span>
+    <h2>✏️ Edit Note</h2>
+
+    <label>Title:</label>
+    <input type="text" id="note-title-input" maxlength="100" style="width:100%;">
+    <label>Note Content:</label>
+    <textarea id="note-content-input" rows="10" style="width:100%;"></textarea>
+
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+      <button id="delete-note-btn" style="background:#e24a4a;">🗑️ Delete</button>
+      <button id="save-note-btn">💾 Save Note</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const NOTES_KEY = 'simpleNotesApp_notes';
+const SETTINGS_KEY = 'simpleNotesApp_settings';
+let notes = [];
+let currentNoteId = null;
+let settings = { theme:'light', timezone:'Local (Browser)' };
+
+// --- Settings ---
+function populateTimezones() {
+  const select = document.getElementById('timezone-select');
+  select.innerHTML = '';
+  const zones = ["Local (Browser)", "UTC"];
+  if (typeof Intl.supportedValuesOf === 'function')
+    zones.push(...Intl.supportedValuesOf('timeZone'));
+  zones.forEach(z=>{
+    const opt = document.createElement('option');
+    opt.value = z;
+    opt.textContent = z;
+    select.appendChild(opt);
+  });
+}
+function loadSettings() {
+  const s = localStorage.getItem(SETTINGS_KEY);
+  if (s) settings = JSON.parse(s);
+  applySettings();
+}
+function saveSettings() {
+  settings.timezone = document.getElementById('timezone-select').value;
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  applySettings();
+  closeModal('settings-modal');
+}
+function toggleTheme() {
+  settings.theme = settings.theme === 'light' ? 'dark' : 'light';
+  saveSettings();
+}
+function applySettings() {
+  document.body.dataset.theme = settings.theme;
+  document.getElementById('timezone-select').value = settings.timezone;
+  renderNotes();
+}
+
+// --- Utility ---
+function formatTimestamp(ts) {
+  if (!ts) return '—';
+  const date = new Date(ts);
+  const tz = settings.timezone;
+  const options = { year:'numeric', month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false };
+  if (tz === 'UTC') options.timeZone = 'UTC';
+  else if (tz !== 'Local (Browser)') options.timeZone = tz;
+  return date.toLocaleString(undefined, options);
+}
+
+// --- Notes CRUD ---
+function loadNotes() {
+  notes = JSON.parse(localStorage.getItem(NOTES_KEY) || '[]');
+  renderNotes();
+}
+function saveNotes() {
+  localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+  renderNotes();
+}
+function createNote() {
+  const now = Date.now();
+  const n = { id: now, title: 'New Note', content: '', createdAt: now, editedAt: null };
+  notes.unshift(n);
+  saveNotes(); // but don't set editedAt
+  editNote(n.id);
+}
+function editNote(id) {
+  const n = notes.find(x=>x.id===id); if (!n) return;
+  currentNoteId = id;
+  document.getElementById('note-title-input').value = n.title;
+  document.getElementById('note-content-input').value = n.content;
+  openModal('note-modal');
+}
+function saveNote() {
+  const idx = notes.findIndex(x=>x.id===currentNoteId);
+  if (idx===-1) return;
+  const note = notes[idx];
+  const newTitle = document.getElementById('note-title-input').value.trim() || 'Untitled Note';
+  const newContent = document.getElementById('note-content-input').value.trim();
+  const changed = newTitle !== note.title || newContent !== note.content;
+  note.title = newTitle;
+  note.content = newContent;
+  // Only update editedAt if reopened and saved again (not new creation)
+  if (changed && (note.editedAt !== null || note.content !== '' && note.title !== 'New Note'))
+    note.editedAt = Date.now();
+  saveNotes();
+  closeModal('note-modal');
+  currentNoteId = null;
+}
+function deleteNote() {
+  if (!confirm('Delete this note?')) return;
+  notes = notes.filter(n=>n.id!==currentNoteId);
+  saveNotes();
+  closeModal('note-modal');
+  currentNoteId=null;
+}
+
+// --- Render ---
+function sortNotes(a,b){
+  const key=document.getElementById('sort-by').value;
+  if(key==='title') return a.title.localeCompare(b.title);
+  if(key==='created') return b.createdAt - a.createdAt;
+  return (b.editedAt||b.createdAt)-(a.editedAt||a.createdAt);
+}
+function renderNotes() {
+  const c=document.getElementById('notes-container');
+  while(c.children.length>1)c.removeChild(c.lastChild);
+  [...notes].sort(sortNotes).forEach(n=>{
+    const d=document.createElement('div');d.className='note-item';d.onclick=()=>editNote(n.id);
+    d.innerHTML=`
+      <div>${n.title}</div>
+      <div>${formatTimestamp(n.createdAt)}</div>
+      <div>${formatTimestamp(n.editedAt)}</div>
+      <div>${n.content.length>200?n.content.slice(0,200)+'...':n.content}</div>
+      <div class="note-actions"><button onclick="event.stopPropagation();editNote(${n.id})">⚙️</button></div>`;
+    c.appendChild(d);
+  });
+  if(!notes.length)c.innerHTML+='<p style="text-align:center;margin-top:50px;">Click "➕ Add Note" to create your first note!</p>';
+}
+
+// --- Modal helpers ---
+function openModal(id){document.getElementById(id).style.display='block';}
+function closeModal(id){document.getElementById(id).style.display='none';}
+
+// --- Init ---
+document.addEventListener('DOMContentLoaded',()=>{
+  populateTimezones();
+  loadSettings();
+  loadNotes();
+  document.getElementById('add-note-btn').onclick=createNote;
+  document.getElementById('save-note-btn').onclick=saveNote;
+  document.getElementById('delete-note-btn').onclick=deleteNote;
+  document.getElementById('settings-btn').onclick=()=>openModal('settings-modal');
+  document.getElementById('save-settings-btn').onclick=saveSettings;
+  document.getElementById('theme-toggle').onclick=toggleTheme;
+  document.getElementById('sort-by').onchange=renderNotes;
+  document.querySelectorAll('.close-btn').forEach(b=>b.onclick=e=>closeModal(e.target.dataset.modal));
+  window.onclick=e=>{if(e.target.classList.contains('modal'))e.target.style.display='none';};
+});
+</script>
+</body>
+</html>
