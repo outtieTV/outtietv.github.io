@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simple Notes WebApp</title>
+<title>Simple Notes WebApp (Markdown)</title>
 <style>
 :root {
   --bg-color-light: #f5f5f5;
@@ -84,6 +84,10 @@ button:hover { opacity: 0.9; }
   border: 1px solid var(--border-color-light);
   border-radius: 8px;
 }
+.note-body {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .note-actions {
   grid-column: 5 / span 1;
   display: flex;
@@ -129,6 +133,16 @@ button:hover { opacity: 0.9; }
 }
 .close-btn:hover { color: #e24a4a; }
 
+.markdown-preview {
+  border: 1px solid var(--border-color-light);
+  padding: 10px;
+  border-radius: 5px;
+  margin-top: 10px;
+  max-height: 200px;
+  overflow: auto;
+  background-color: var(--note-bg-light);
+}
+
 @media (max-width: 768px) {
   .note-item { grid-template-columns: 1fr; gap: 5px; }
   .note-actions { flex-direction: row; justify-content: flex-end; }
@@ -138,7 +152,7 @@ button:hover { opacity: 0.9; }
 <body data-theme="light">
 
 <header class="header">
-  <h1>📝 Local Notes</h1>
+  <h1>📝 Local Notes (Markdown)</h1>
   <div class="control-group">
     <select id="sort-by">
       <option value="modified">Sort by Last Modified</option>
@@ -155,7 +169,7 @@ button:hover { opacity: 0.9; }
     <div>NOTE TITLE</div>
     <div>CREATION DATE</div>
     <div>EDIT DATE</div>
-    <div>NOTE</div>
+    <div>NOTE (Markdown View)</div>
     <div class="note-actions">ACTIONS</div>
   </div>
 </div>
@@ -180,12 +194,14 @@ button:hover { opacity: 0.9; }
 <div id="note-modal" class="modal">
   <div class="modal-content">
     <span class="close-btn" data-modal="note-modal">&times;</span>
-    <h2>✏️ Edit Note</h2>
+    <h2>✏️ Edit Note (Markdown Supported)</h2>
 
     <label>Title:</label>
     <input type="text" id="note-title-input" maxlength="100" style="width:100%;">
-    <label>Note Content:</label>
-    <textarea id="note-content-input" rows="10" style="width:100%;"></textarea>
+    <label>Note Content (Markdown):</label>
+    <textarea id="note-content-input" rows="8" style="width:100%;"></textarea>
+
+    <div class="markdown-preview" id="markdown-preview"></div>
 
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
       <button id="delete-note-btn" style="background:#e24a4a;">🗑️ Delete</button>
@@ -194,6 +210,7 @@ button:hover { opacity: 0.9; }
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
 <script>
 const NOTES_KEY = 'simpleNotesApp_notes';
 const SETTINGS_KEY = 'simpleNotesApp_settings';
@@ -260,7 +277,7 @@ function createNote() {
   const now = Date.now();
   const n = { id: now, title: 'New Note', content: '', createdAt: now, editedAt: null };
   notes.unshift(n);
-  saveNotes(); // but don't set editedAt
+  saveNotes();
   editNote(n.id);
 }
 function editNote(id) {
@@ -268,6 +285,7 @@ function editNote(id) {
   currentNoteId = id;
   document.getElementById('note-title-input').value = n.title;
   document.getElementById('note-content-input').value = n.content;
+  updateMarkdownPreview(n.content);
   openModal('note-modal');
 }
 function saveNote() {
@@ -279,7 +297,6 @@ function saveNote() {
   const changed = newTitle !== note.title || newContent !== note.content;
   note.title = newTitle;
   note.content = newContent;
-  // Only update editedAt if reopened and saved again (not new creation)
   if (changed && (note.editedAt !== null || note.content !== '' && note.title !== 'New Note'))
     note.editedAt = Date.now();
   saveNotes();
@@ -294,6 +311,12 @@ function deleteNote() {
   currentNoteId=null;
 }
 
+// --- Markdown Preview ---
+function updateMarkdownPreview(md) {
+  const preview = document.getElementById('markdown-preview');
+  preview.innerHTML = marked.parse(md || '');
+}
+
 // --- Render ---
 function sortNotes(a,b){
   const key=document.getElementById('sort-by').value;
@@ -306,11 +329,12 @@ function renderNotes() {
   while(c.children.length>1)c.removeChild(c.lastChild);
   [...notes].sort(sortNotes).forEach(n=>{
     const d=document.createElement('div');d.className='note-item';d.onclick=()=>editNote(n.id);
+    const contentHTML = marked.parse(n.content.length>500?n.content.slice(0,500)+'...':n.content);
     d.innerHTML=`
       <div>${n.title}</div>
       <div>${formatTimestamp(n.createdAt)}</div>
       <div>${formatTimestamp(n.editedAt)}</div>
-      <div>${n.content.length>200?n.content.slice(0,200)+'...':n.content}</div>
+      <div class="note-body">${contentHTML}</div>
       <div class="note-actions"><button onclick="event.stopPropagation();editNote(${n.id})">⚙️</button></div>`;
     c.appendChild(d);
   });
@@ -335,6 +359,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('sort-by').onchange=renderNotes;
   document.querySelectorAll('.close-btn').forEach(b=>b.onclick=e=>closeModal(e.target.dataset.modal));
   window.onclick=e=>{if(e.target.classList.contains('modal'))e.target.style.display='none';};
+  document.getElementById('note-content-input').addEventListener('input',e=>updateMarkdownPreview(e.target.value));
 });
 </script>
 </body>
