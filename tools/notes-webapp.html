@@ -187,6 +187,23 @@ button{cursor:pointer;transition:.1s}
         grid-row: 4 / 5;
     }
 }
+/* Always show hamburger when sidebar is collapsed */
+#mobile-toggle-btn {
+    display: inline-block !important;
+    order: -1; /* move left of title */
+    margin-right: 8px;
+}
+
+.sidebar:not(.collapsed) ~ .main #mobile-toggle-btn {
+    display: none !important; /* hide when sidebar is open on large screens */
+}
+
+/* Adjust title + hamburger layout */
+.main > div:first-child {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
 </style>
 </head>
 <body data-theme="light">
@@ -204,9 +221,9 @@ button{cursor:pointer;transition:.1s}
 
 <div class="main">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
-    <h2 id="current-folder-title">All Notes</h2>
-    <div>
-      <button id="mobile-toggle-btn" class="btn secondary">☰</button> 
+    <button id="mobile-toggle-btn" class="btn secondary">☰</button> 
+	<h2 id="current-folder-title">All Notes</h2>
+	<div>
       <button id="add-note-btn" class="btn">➕ Add Note</button>
       <button id="settings-btn" class="btn secondary">⚙️</button>
     </div>
