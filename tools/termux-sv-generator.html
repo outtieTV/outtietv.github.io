@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Termux Service Generator</title>
+<style>
+  :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial; color:#0b1220}
+  body{max-width:900px;margin:28px auto;padding:20px;background:#fbfbfc;border:1px solid #e6e9ee;border-radius:10px;box-shadow:0 6px 30px rgba(11,18,32,.04)}
+  h1{margin:0 0 14px;font-size:20px}
+  label{display:block;margin-top:10px;font-weight:600}
+  input[type="text"], textarea{width:100%;padding:8px;border:1px solid #d7dbe2;border-radius:6px;font-size:14px}
+  textarea{min-height:90px;resize:vertical}
+  .row{display:flex;gap:12px}
+  .col{flex:1}
+  .checkbox{display:flex;gap:8px;align-items:center;margin-top:8px}
+  .small{font-size:13px;color:#334155}
+  button{margin-top:14px;padding:10px 14px;border:0;background:#0057ff;color:white;border-radius:10px;font-weight:600;cursor:pointer}
+  pre{background:#0b1220;color:#e6eefc;padding:12px;border-radius:8px;overflow:auto;font-size:13px}
+  .muted{color:#6b7280;font-size:13px;margin-top:6px}
+</style>
+</head>
+<body>
+  <h1>Termux Service Generator</h1>
+  <p class="muted">Fill out the form and click <strong>Generate</strong>. Copy the output and paste it into Termux.</p>
+
+  <label>Service name (folder name, e.g. <code>myserver</code>)</label>
+  <input id="pkg" type="text" placeholder="myserver" value="myserver">
+
+  <label>Program start command</label>
+  <input id="cmd" type="text" placeholder="php -S 0.0.0.0:8000" value="php -S 0.0.0.0:8000">
+
+  <label>Change directory before running?</label>
+  <div class="row">
+    <div class="col checkbox">
+      <input id="needCd" type="checkbox">
+      <label for="needCd" class="small">Enable <code>cd</code></label>
+    </div>
+    <div class="col">
+      <input id="cdDir" type="text" placeholder="/path/to/project (optional)">
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <div class="checkbox">
+        <input id="useSudo" type="checkbox">
+        <label for="useSudo" class="small">Needs <code>sudo</code></label>
+      </div>
+    </div>
+    <div class="col">
+      <div class="checkbox">
+        <input id="useScreen" type="checkbox">
+        <label for="useScreen" class="small">Run inside <code>screen</code></label>
+      </div>
+    </div>
+  </div>
+
+  <button id="gen">Generate Command</button>
+
+  <pre id="out">— click Generate —</pre>
+
+  <p class="muted">
+    After running the generated command, control it with:
+    <br><code>sv enable &lt;name&gt;</code> — auto-start at boot<br>
+    <code>sv start &lt;name&gt;</code>, <code>sv stop &lt;name&gt;</code>, <code>sv disable &lt;name&gt;</code>
+  </p>
+
+<script>
+function shescape(s){
+  return "'" + String(s).replace(/'/g,"'\\''") + "'";
+}
+
+function generate(){
+  const pkg = (document.getElementById('pkg').value || '').trim();
+  if(!/^[A-Za-z0-9_.-]+$/.test(pkg)){
+    alert("Invalid service name.");
+    return;
+  }
+  const cmd = (document.getElementById('cmd').value || '').trim();
+  if(!cmd){ alert("Start command required."); return; }
+
+  const useSudo = document.getElementById('useSudo').checked;
+  const useScreen = document.getElementById('useScreen').checked;
+  const needCd = document.getElementById('needCd').checked;
+  const cdDir = (document.getElementById('cdDir').value || '').trim();
+
+  let runBody = "";
+  let runCmd = cmd;
+  if(useSudo) runCmd = "sudo " + runCmd;
+
+  if(needCd && cdDir){
+    runBody += `cd ${shescape(cdDir)} || exit 1\n`;
+  }
+
+  if(useScreen){
+    runBody += `screen -dmS ${pkg} sh -lc ${shescape(runCmd)}\n`;
+    runBody += `tail -f /dev/null`;
+  } else {
+    runBody += `exec sh -lc ${shescape(runCmd)}`;
+  }
+
+  // newline HEREDOC fix
+  const script = `
+mkdir -p "$PREFIX/var/service/${pkg}/log" && \\
+ln -sf "$PREFIX/share/termux-services/svlogger" "$PREFIX/var/service/${pkg}/log/run" && \\
+cat > "$PREFIX/var/service/${pkg}/run" <<'__EOF__'
+#!/data/data/com.termux/files/usr/bin/sh
+set -e
+${runBody}
+__EOF__
+chmod +x "$PREFIX/var/service/${pkg}/run" && \\
+echo "Service '${pkg}' created. Use 'sv enable ${pkg}', 'sv start ${pkg}', etc."
+`.trim();
+
+  // keep readable newlines (no flattening)
+  document.getElementById('out').textContent = script;
+}
+
+document.getElementById('gen').addEventListener('click', generate);
+</script>
+</body>
+</html>
