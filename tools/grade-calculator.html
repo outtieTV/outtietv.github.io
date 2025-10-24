@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Academic Grade Calculator & Planner</title>
+    <!-- Load Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configure Tailwind for Inter font -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        'primary-dark': '#1e293b',
+                        'secondary-dark': '#334155',
+                        'accent': '#10b981',
+                        'accent-light': '#34d399',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Custom styles for non-Tailwind elements and scrollbar -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Slate-900 */
+        }
+        /* Custom scrollbar for grade list on dark theme */
+        #grade-inputs::-webkit-scrollbar {
+            width: 8px;
+        }
+        #grade-inputs::-webkit-scrollbar-thumb {
+            background-color: #374151; /* Gray-700 */
+            border-radius: 10px;
+        }
+        #grade-inputs::-webkit-scrollbar-track {
+            background-color: #1f2937; /* Gray-800 */
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 sm:p-8 flex items-start justify-center">
+
+    <div class="w-full max-w-6xl space-y-8">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight">Grade Planner</h1>
+            <p class="text-xl mt-2 text-accent-light">Calculate your average and plan your finals.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+            <!-- Container 1: Weighted Grade Average Calculator -->
+            <div id="container-average" class="bg-primary-dark p-6 sm:p-8 rounded-xl shadow-2xl border border-gray-700">
+                <h2 class="text-2xl font-semibold mb-6 text-white border-b border-gray-700 pb-3">1. Weighted Average Calculator</h2>
+                
+                <div class="space-y-4">
+                    <!-- Grade Inputs Container -->
+                    <div id="grade-inputs" class="space-y-3 max-h-96 overflow-y-auto pr-2">
+                        <!-- Default grade item goes here -->
+                    </div>
+
+                    <button onclick="addGradeItem()" class="w-full py-2 bg-secondary-dark text-white rounded-lg hover:bg-gray-600 transition duration-150 font-medium flex items-center justify-center space-x-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+                        </svg>
+                        <span>Add Grade Item</span>
+                    </button>
+
+                    <!-- Results & Summary -->
+                    <div class="pt-4 border-t border-gray-700 mt-4">
+                        <div class="flex justify-between items-center text-lg font-medium text-white mb-2">
+                            <span>Total Weight:</span>
+                            <span id="total-weight" class="text-accent-light">0.00%</span>
+                        </div>
+                        <div class="flex justify-between items-center text-2xl font-bold text-white">
+                            <span>Weighted Average:</span>
+                            <span id="weighted-average" class="text-accent">N/A</span>
+                        </div>
+                        <p id="average-error" class="text-red-400 text-sm mt-2 hidden"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Container 2: Required Grade Calculator -->
+            <div id="container-required" class="bg-primary-dark p-6 sm:p-8 rounded-xl shadow-2xl border border-gray-700">
+                <h2 class="text-2xl font-semibold mb-6 text-white border-b border-gray-700 pb-3">2. Required Exam Grade Planner</h2>
+
+                <div class="space-y-4">
+                    
+                    <!-- Input: Current Grade -->
+                    <div class="space-y-1">
+                        <label for="current-grade" class="block text-sm font-medium text-gray-300">Current Grade (0.00 - 100.00%)</label>
+                        <input type="text" id="current-grade" placeholder="e.g., 85.50" min="0" max="100" step="0.01" class="w-full px-4 py-2 bg-secondary-dark border border-gray-600 rounded-lg text-white focus:ring-accent focus:border-accent" oninput="validateInput(this); calculateRequiredGrade()">
+                    </div>
+
+                    <!-- Input: Exam Weight -->
+                    <div class="space-y-1">
+                        <label for="exam-weight" class="block text-sm font-medium text-gray-300">Exam/Final Weight (0.00 - 100.00%)</label>
+                        <input type="text" id="exam-weight" placeholder="e.g., 30.00" min="0" max="100" step="0.01" class="w-full px-4 py-2 bg-secondary-dark border border-gray-600 rounded-lg text-white focus:ring-accent focus:border-accent" oninput="validateInput(this); calculateRequiredGrade()">
+                    </div>
+
+                    <!-- Input: Target Grade -->
+                    <div class="space-y-1">
+                        <label for="target-grade" class="block text-sm font-medium text-gray-300">Target Overall Grade (0.00 - 100.00%)</label>
+                        <input type="text" id="target-grade" placeholder="e.g., 92.00" min="0" max="100" step="0.01" class="w-full px-4 py-2 bg-secondary-dark border border-gray-600 rounded-lg text-white focus:ring-accent focus:border-accent" oninput="validateInput(this); calculateRequiredGrade()">
+                    </div>
+
+                    <!-- Required Score Result -->
+                    <div class="pt-4 border-t border-gray-700 mt-6">
+                        <h3 class="text-xl font-medium text-white mb-2">Required Exam Score:</h3>
+                        <div class="text-4xl font-extrabold text-center py-4 rounded-lg" id="required-grade-output">
+                            <span class="text-gray-500">Enter Values Above</span>
+                        </div>
+                        <p id="required-grade-error" class="text-red-400 text-sm mt-2 hidden"></p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        // Global counter for grade items to ensure unique IDs
+        let gradeItemCount = 0;
+
+        /**
+         * Ensures the input value is within the 0.00 to 100.00 range.
+         * @param {HTMLInputElement} input - The input element to validate.
+         */
+        function validateInput(input) {
+            let value = parseFloat(input.value);
+            if (isNaN(value)) {
+                return;
+            }
+
+            if (value < 0) {
+                input.value = '0.00';
+            } else if (value > 100) {
+                input.value = '100.00';
+            }
+
+            // Ensure two decimal places for aesthetic consistency
+            if (input.type === 'number') {
+                input.value = parseFloat(input.value).toFixed(2);
+            }
+
+            // Trigger calculation for the average calculator after validation
+            if (input.closest('.grade-item')) {
+                calculateWeightedAverage();
+            }
+        }
+
+        /**
+         * Creates and inserts a new grade input item into the DOM.
+         */
+        function addGradeItem() {
+            gradeItemCount++;
+            const container = document.getElementById('grade-inputs');
+            
+            const gradeItem = document.createElement('div');
+            gradeItem.className = 'grade-item flex flex-col sm:flex-row gap-2 bg-secondary-dark p-4 rounded-lg shadow-inner';
+            gradeItem.setAttribute('data-id', gradeItemCount);
+            
+            gradeItem.innerHTML = `
+                <!-- Grade Name -->
+                <input type="text" placeholder="Grade Name (e.g., Midterm)" 
+                       class="w-full sm:w-2/5 px-3 py-2 bg-primary-dark border border-gray-600 rounded-md text-white placeholder-gray-400 focus:ring-accent focus:border-accent" 
+                       oninput="calculateWeightedAverage()">
+                
+                <!-- Grade % -->
+                <input type="text" placeholder="Score (%)" min="0" max="100" step="0.01" 
+                       class="w-full sm:w-1/4 px-3 py-2 bg-primary-dark border border-gray-600 rounded-md text-white focus:ring-accent focus:border-accent" 
+                       oninput="validateInput(this);">
+                
+                <!-- Weight % -->
+                <input type="text" placeholder="Weight (%)" min="0" max="100" step="0.01" 
+                       class="w-full sm:w-1/4 px-3 py-2 bg-primary-dark border border-gray-600 rounded-md text-white focus:ring-accent focus:border-accent" 
+                       oninput="validateInput(this);">
+                
+                <!-- Remove Button -->
+                <button onclick="removeGradeItem(this)" 
+                        class="sm:w-10 flex-shrink-0 p-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition duration-150"
+                        title="Remove Grade Item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            `;
+            container.appendChild(gradeItem);
+            calculateWeightedAverage(); // Recalculate after adding
+        }
+
+        /**
+         * Removes a grade input item from the DOM.
+         * @param {HTMLButtonElement} button - The remove button element.
+         */
+        function removeGradeItem(button) {
+            const item = button.closest('.grade-item');
+            if (item) {
+                item.remove();
+                calculateWeightedAverage(); // Recalculate after removing
+            }
+        }
+
+        /**
+         * Calculates the weighted average grade from all inputs.
+         */
+        function calculateWeightedAverage() {
+            const items = document.querySelectorAll('.grade-item');
+            let totalWeightedSum = 0;
+            let totalWeight = 0;
+            const errorElement = document.getElementById('average-error');
+            const averageOutput = document.getElementById('weighted-average');
+            const weightOutput = document.getElementById('total-weight');
+            
+            errorElement.classList.add('hidden');
+            
+            items.forEach(item => {
+                // Grade inputs are at index 1 and 2 of the children inputs
+                const gradeInput = item.querySelector('input[placeholder="Score (%)"]');
+                const weightInput = item.querySelector('input[placeholder="Weight (%)"]');
+                
+                const grade = parseFloat(gradeInput.value);
+                const weight = parseFloat(weightInput.value);
+                
+                // Only process items where both grade and weight are valid numbers
+                if (!isNaN(grade) && !isNaN(weight) && weight > 0) {
+                    totalWeightedSum += grade * weight;
+                    totalWeight += weight;
+                }
+            });
+
+            weightOutput.textContent = totalWeight.toFixed(2) + '%';
+            
+            if (totalWeight > 0) {
+                const weightedAverage = totalWeightedSum / totalWeight;
+                
+                if (weightedAverage > 100.00) {
+                    averageOutput.textContent = '100.00%';
+                } else {
+                    averageOutput.textContent = weightedAverage.toFixed(2) + '%';
+                }
+                averageOutput.classList.remove('text-gray-500');
+                averageOutput.classList.add('text-accent');
+
+            } else {
+                averageOutput.textContent = 'N/A';
+                averageOutput.classList.remove('text-accent');
+                averageOutput.classList.add('text-gray-500');
+                if (items.length > 0) {
+                    errorElement.textContent = 'Please enter valid Grade Percent and Grade Weight (>0) for at least one item.';
+                    errorElement.classList.remove('hidden');
+                }
+            }
+        }
+
+        /**
+         * Calculates the required grade on a final exam/assignment to reach a target.
+         */
+        function calculateRequiredGrade() {
+            const currentGradeInput = document.getElementById('current-grade');
+            const examWeightInput = document.getElementById('exam-weight');
+            const targetGradeInput = document.getElementById('target-grade');
+            const outputElement = document.getElementById('required-grade-output');
+            const errorElement = document.getElementById('required-grade-error');
+            
+            errorElement.classList.add('hidden');
+            outputElement.innerHTML = '<span class="text-gray-500">Enter Values Above</span>';
+            outputElement.classList.remove('text-red-400', 'text-yellow-400', 'text-accent');
+
+            const currentGrade = parseFloat(currentGradeInput.value);
+            const examWeight = parseFloat(examWeightInput.value);
+            const targetGrade = parseFloat(targetGradeInput.value);
+            
+            // Basic validation
+            if (isNaN(currentGrade) || isNaN(examWeight) || isNaN(targetGrade) || examWeight <= 0) {
+                return;
+            }
+
+            // Convert exam weight to a decimal (e.g., 30 -> 0.30)
+            const W_E = examWeight / 100;
+
+            // Calculate current weight of all prior grades (e.g., if exam is 30%, prior grades are 70%)
+            const W_C = 1 - W_E;
+            
+            // Required Score (R) formula: R = [Target - (Current Grade * Current Weight)] / Exam Weight
+            // All values are percentages (0-100)
+            const requiredScore = (targetGrade - (currentGrade * W_C)) / W_E;
+
+            let displayScore = requiredScore.toFixed(2);
+            let resultColor = 'text-accent';
+            let message = '';
+
+            if (requiredScore > 100.00) {
+                // Cap the output at 100.00, but show the error
+                message = `You need ${displayScore}% to reach your target of ${targetGrade.toFixed(2)}%. This is impossible as the maximum score is 100.00%.`;
+                resultColor = 'text-red-400';
+                displayScore = '100.00'; // Display 100 as the maximum possible required score
+            } else if (requiredScore < 0.00) {
+                message = `You can still reach your target of ${targetGrade.toFixed(2)}% even if you score 0.00% on the final. Great job!`;
+                resultColor = 'text-yellow-400';
+                displayScore = '0.00'; // Display 0 as the minimum possible required score
+            } else {
+                message = `To achieve an overall grade of ${targetGrade.toFixed(2)}%, you need to score ${displayScore}% on the final exam.`;
+                resultColor = 'text-accent';
+            }
+            
+            // Update UI
+            outputElement.innerHTML = `<span class="${resultColor} text-5xl">${displayScore}%</span>`;
+            errorElement.textContent = message;
+            errorElement.classList.remove('hidden');
+        }
+
+        // Initialize with one grade item on load
+        window.onload = function() {
+            addGradeItem();
+            // Attach event listeners to all relevant inputs to trigger recalculation 
+            // of the required grade whenever any input changes
+            document.querySelectorAll('#container-required input').forEach(input => {
+                input.addEventListener('input', () => {
+                    validateInput(input); // Validate first
+                    calculateRequiredGrade(); // Then calculate
+                });
+            });
+        };
+
+    </script>
+</body>
+</html>
