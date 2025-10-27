@@ -563,7 +563,19 @@ function deleteFolder(id) {
 }
 
 // --- Note List Rendering ---
+function handleNoteModalClose(noteId) {
+    const n = notes.find(x => x.id === noteId);
 
+    // Only delete the note if it was newly created and has not been saved/edited.
+    // An unsaved note is defined as one where 'editedAt' is null.
+    if (n && n.editedAt === null && n.content === '' && n.title.trim() === '') {
+        notes = notes.filter(a => a.id !== noteId);
+        save();
+        renderNotes();
+    }
+    
+    closeModal('note-modal');
+}
 function renderNotes() {
     const c = document.getElementById('notes-container');
     while (c.children.length > 1) c.removeChild(c.lastChild);
@@ -643,7 +655,8 @@ function populateFolderSelect() {
 
 function addNote() {
     const now = Date.now();
-    const note = { id: now.toString(), title: 'New Note', content: '', createdAt: now, editedAt: null, folder: activeFolder };
+    // Set title to empty string temporarily, editedAt to null.
+    const note = { id: now.toString(), title: '', content: '', createdAt: now, editedAt: null, folder: activeFolder };
     notes.unshift(note);
     save();
     renderNotes();
@@ -673,6 +686,10 @@ function openEdit(id) {
         }
     };
     
+    // --- NEW CLOSE BUTTON LOGIC ---
+    document.querySelector('#note-modal .close-btn').onclick = (e) => handleNoteModalClose(n.id);
+    // --- END NEW CLOSE BUTTON LOGIC ---
+
     modal.classList.add('open');
 }
 
@@ -686,16 +703,31 @@ function saveNote(id) {
 
     const titleChanged = title !== n.title;
     const contentChanged = content !== n.content;
+    const folderChanged = folder !== n.folder; // Not strictly needed for edit timestamp but good practice
 
     n.title = title;
     n.content = content;
     n.folder = folder;
 
-    if (titleChanged || contentChanged) {
-        if (n.editedAt || n.title !== 'New Note' || n.content !== '') {
+    // Check if any significant data has changed
+    if (titleChanged || contentChanged || folderChanged) {
+        // Only update editedAt if the note is an existing note OR if this is the first save of a new note with content
+        // We set editedAt to Date.now() if it's the first save and content is present, otherwise we leave it null for cleanup.
+        if (n.createdAt === n.editedAt || n.editedAt !== null || n.content.length > 0 || n.title !== 'Untitled') {
              n.editedAt = Date.now();
         }
     }
+
+    // Ensure editedAt is set if there is content, even on first save.
+    if (n.content.length > 0 && n.editedAt === null) {
+        n.editedAt = Date.now();
+    }
+    
+    // Fallback title for completely empty notes
+    if (n.title.trim() === '') {
+        n.title = 'Untitled';
+    }
+
 
     save();
     renderNotes();
@@ -845,7 +877,7 @@ function initialLayoutCheck() {
 
 // Listeners
 document.getElementById('note-content-input').addEventListener('input', e => updatePreview(e.target.value));
-document.querySelectorAll('.close-btn').forEach(b => b.onclick = e => closeModal(e.target.dataset.close));
+document.querySelectorAll('.modal:not(#note-modal) .close-btn').forEach(b => b.onclick = e => closeModal(e.target.dataset.close));
 document.getElementById('add-note-btn').onclick = addNote;
 document.getElementById('all-notes-btn').onclick = () => setActiveFolder(null);
 document.getElementById('settings-btn').onclick = () => document.getElementById('settings-modal').classList.add('open');
