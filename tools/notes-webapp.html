@@ -79,21 +79,23 @@ button{cursor:pointer;transition:.1s}
 .folder-header{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-radius:6px;cursor:pointer}
 .folder-header:hover{background:var(--hover)}
 .folder-item.active > .folder-header{background:var(--accent);color:#fff}
-.folder-name-wrapper{display:flex;align-items:center;flex-grow:1;min-width:0;overflow:hidden}
+.folder-name-wrapper{display:flex;align-items:center;flex-grow:1;min-width:0;overflow:hidden; gap: 8px;} /* ADDED gap: 8px */
 .folder-name{
     white-space:nowrap;
     overflow:hidden;
     text-overflow:ellipsis;
-    color: white !important;
-    text-shadow: 
-        -1px -1px 0 #000,  
-         1px -1px 0 #000,
-        -1px  1px 0 #000,
-         1px  1px 0 #000;
+    /* REMOVED: all text-shadow and color overrides */
 }
 .folder-item.active .folder-name{
     color: #fff !important; 
     text-shadow: none;
+}
+.folder-color-swatch {
+    width: 14px; /* Size of the square */
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    flex-shrink: 0; /* Prevents it from shrinking */
 }
 .folder-actions{display:flex;gap:4px;margin-left:8px}
 .folder-actions button{background:transparent;border:none;color:var(--muted);padding:0 4px;font-size:1.1em;line-height:1;transition:none}
@@ -371,10 +373,20 @@ function renderFolderTreeRecursive(tree, container) {
         const nameWrapper = document.createElement('div');
         nameWrapper.className = 'folder-name-wrapper';
 
-        // Folder Name Element
+        // --- NEW: Folder Color Swatch ---
+        const colorSwatch = document.createElement('div');
+        colorSwatch.className = 'folder-color-swatch';
+        colorSwatch.style.backgroundColor = folder.color || 'var(--accent)';
+        nameWrapper.appendChild(colorSwatch);
+        // --- END NEW ---
+
+		// Folder Name Element
         const folderName = document.createElement('strong');
         folderName.className = 'folder-name';
         folderName.textContent = folder.name;
+        // --- NEW LINE ADDED HERE ---
+        folderName.title = folder.name; // This shows the full title on hover
+        // ---------------------------
         nameWrapper.appendChild(folderName);
 
         nameWrapper.onclick = (e) => {
@@ -420,22 +432,7 @@ function renderFolderTreeRecursive(tree, container) {
         header.appendChild(actions);
         item.appendChild(header);
         
-        // Apply background color to header/wrapper
-        if (folder.id !== activeFolder) {
-            header.style.backgroundColor = folder.color || 'var(--accent)';
-            // Ensure wrapper styles are minimal when header takes color
-            nameWrapper.style.backgroundColor = '';
-            nameWrapper.style.padding = '0';
-            nameWrapper.style.borderRadius = '0';
-        } else {
-             // Reset header background when active since .active styles take over
-            header.style.backgroundColor = '';
-            // Apply color to wrapper for visual cue/contrast
-            nameWrapper.style.backgroundColor = folder.color || 'var(--accent)';
-            nameWrapper.style.padding = '4px 8px';
-            nameWrapper.style.borderRadius = '4px';
-            nameWrapper.style.flexGrow = '1';
-        }
+        // --- REMOVED: Logic to apply folder.color to header/nameWrapper background ---
 
 
         // Children Container
@@ -505,9 +502,32 @@ function addFolder(parentId = null) {
 function renameFolder(id) {
     const folder = findFolder(id);
     if (!folder) return;
+
+    // 1. Prompt for new name
     const newName = prompt('Rename folder:', folder.name);
-    if (newName && newName.trim() !== folder.name) {
+    //if (!newName || newName.trim() === folder.name) return; // Exit if canceled or name is unchanged
+
+    // 2. Prompt for new color
+    const newColor = prompt('Change folder color (hex or name):', folder.color);
+    // Exit if canceled and color is unchanged, or if name was already empty (handled above)
+    //if (newColor === null && newName.trim() === folder.name && newColor === folder.color) return;
+
+
+    // Apply changes only if the value is different (and not null for color, or not empty for name)
+    let changed = false;
+
+    if (newName.trim() !== folder.name) {
         folder.name = newName.trim();
+        changed = true;
+    }
+    
+    // Only update color if a value was provided/changed
+    if (newColor !== null && newColor.trim() !== folder.color) {
+        folder.color = newColor.trim() || '#4a90e2'; // Use default if they clear the color prompt
+        changed = true;
+    }
+
+    if (changed) {
         save();
         renderFolders();
     }
