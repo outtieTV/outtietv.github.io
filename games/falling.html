@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Retro Falling</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; 
+      background: linear-gradient(#111, #333);
+      overflow: hidden;
+      display: flex; 
+      flex-direction: column; 
+      align-items: center;
+    }
+    canvas { 
+      background: linear-gradient(#222, #000);
+      display: block; 
+      margin-top: 20px; 
+      border-radius: 10px; 
+      box-shadow: 0 0 20px rgba(0,0,0,0.6);
+    }
+    #score {
+      color: white; 
+      font-family: monospace; 
+      font-size: 24px; 
+      margin-top: 10px;
+      text-shadow: 0 0 8px lime;
+    }
+  </style>
+</head>
+<body>
+  <div id="score">Score: 0</div>
+  <canvas id="game" width="400" height="600"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const scoreDisplay = document.getElementById("score");
+
+// Player setup
+const player = {
+  x: canvas.width / 2 - 15,
+  y: 30, // safer spawn
+  width: 30,
+  height: 30,
+  color: "lime",
+  vy: 0
+};
+
+const gravity = 0.4;
+const platformSpeed = 2; // faster platform descent
+const platformGap = 120;
+const platformHeight = 20;
+const mapHeight = -20; // squish ceiling (just above visible area)
+const moveSpeed = 5;
+const swipeThreshold = 30;
+
+let platforms = [];
+let score = 0;
+let gameOver = false;
+
+// --- Platform creation ---
+function createPlatform(y) {
+  const gapWidth = 40 + Math.random() * 60;
+  const gapX = Math.random() * (canvas.width - gapWidth);
+  const color = `hsl(${Math.random() * 360}, 70%, 60%)`;
+  platforms.push({ y, gapX, gapWidth, color });
+}
+
+// Initialize starting platforms
+for (let i = 0; i < Math.ceil(canvas.height / platformGap) + 3; i++) {
+  createPlatform(i * platformGap);
+}
+
+// --- Reset game ---
+function reset() {
+  score = 0;
+  gameOver = false;
+  player.x = canvas.width / 2 - 15;
+  player.y = 30;
+  player.vy = 0;
+  platforms = [];
+  for (let i = 0; i < Math.ceil(canvas.height / platformGap) + 3; i++) {
+    createPlatform(i * platformGap);
+  }
+  scoreDisplay.textContent = `Score: ${score}`;
+}
+
+function update() {
+  if (gameOver) return;
+
+  // Apply gravity
+  player.vy += gravity;
+  player.y += player.vy;
+
+  // Move platforms upward
+  for (let p of platforms) {
+    p.y -= platformSpeed;
+  }
+
+  // If a platform goes off the top, remove it and spawn a new one at the bottom
+  if (platforms[0].y + platformHeight < 0) {
+    platforms.shift();
+    const lastY = platforms[platforms.length - 1].y;
+    createPlatform(lastY + platformGap);
+  }
+
+  // --- Collision + Scoring Logic ---
+  for (let p of platforms) {
+    const inGap =
+      player.x + player.width > p.gapX &&
+      player.x < p.gapX + p.gapWidth;
+
+    // ✅ Score only when passing *through* a gap
+    if (!p.scored && inGap && player.y > p.y + platformHeight) {
+      score++;
+      p.scored = true;
+      scoreDisplay.textContent = `Score: ${score}`;
+    }
+
+    // ✅ Solid platform collision (stand on top)
+    if (
+      player.vy > 0 &&
+      player.y + player.height >= p.y &&
+      player.y + player.height <= p.y + platformHeight &&
+      !inGap
+    ) {
+      // Land on solid part — stop falling, no death
+      player.y = p.y - player.height;
+      player.vy = 0;
+    }
+  }
+
+  // --- Horizontal movement ---
+  if (keys.left) player.x -= moveSpeed;
+  if (keys.right) player.x += moveSpeed;
+
+  // Keep player within bounds
+  if (player.x < 0) player.x = 0;
+  if (player.x + player.width > canvas.width)
+    player.x = canvas.width - player.width;
+
+  // ✅ Squish death (ceiling only)
+  if (player.y < mapHeight) {
+    alert("Game Over — Squished!");
+    gameOver = true;
+    reset();
+    return;
+  }
+
+  // Keep player on screen bottom (safety)
+  if (player.y + player.height > canvas.height) {
+    player.y = canvas.height - player.height;
+    player.vy = 0;
+  }
+}
+
+
+
+
+// --- Drawing ---
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw player
+  ctx.fillStyle = player.color;
+  ctx.fillRect(player.x, player.y, player.width, player.height);
+
+  // Draw platforms
+  for (let p of platforms) {
+    ctx.fillStyle = p.color;
+    // left solid
+    ctx.fillRect(0, p.y, p.gapX, platformHeight);
+    // right solid
+    ctx.fillRect(
+      p.gapX + p.gapWidth,
+      p.y,
+      canvas.width - p.gapX - p.gapWidth,
+      platformHeight
+    );
+  }
+}
+
+// --- Game loop ---
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// --- Input ---
+const keys = { left: false, right: false };
+document.addEventListener("keydown", e => {
+  if (e.code === "ArrowLeft" || e.code === "KeyA") keys.left = true;
+  if (e.code === "ArrowRight" || e.code === "KeyD") keys.right = true;
+});
+document.addEventListener("keyup", e => {
+  if (e.code === "ArrowLeft" || e.code === "KeyA") keys.left = false;
+  if (e.code === "ArrowRight" || e.code === "KeyD") keys.right = false;
+});
+
+// Touch controls
+let touchStartX = null;
+canvas.addEventListener("touchstart", e => {
+  const touch = e.touches[0];
+  touchStartX = touch.clientX;
+});
+canvas.addEventListener("touchend", e => {
+  if (touchStartX === null) return;
+  const deltaX = e.changedTouches[0].clientX - touchStartX;
+  if (Math.abs(deltaX) > swipeThreshold) {
+    if (deltaX > 0) player.x += moveSpeed * 3;
+    else player.x -= moveSpeed * 3;
+    if (player.x < 0) player.x = 0;
+    if (player.x + player.width > canvas.width)
+      player.x = canvas.width - player.width;
+  }
+  touchStartX = null;
+});
+
+loop();
+</script>
+
+
+
+</body>
+</html>
