@@ -42,7 +42,7 @@ const scoreDisplay = document.getElementById("score");
 // Player setup
 const player = {
   x: canvas.width / 2 - 15,
-  y: 30, // safer spawn
+  y: 120, // safer spawn
   width: 30,
   height: 30,
   color: "lime",
@@ -79,7 +79,7 @@ function reset() {
   score = 0;
   gameOver = false;
   player.x = canvas.width / 2 - 15;
-  player.y = 30;
+  player.y = 120;
   player.vy = 0;
   platforms = [];
   for (let i = 0; i < Math.ceil(canvas.height / platformGap) + 3; i++) {
@@ -201,29 +201,7 @@ document.addEventListener("keyup", e => {
   if (e.code === "ArrowRight" || e.code === "KeyD") keys.right = false;
 });
 
-// Touch controls
-let touchStartX = null;
-canvas.addEventListener("touchstart", e => {
-  const touch = e.touches[0];
-  touchStartX = touch.clientX;
-});
-canvas.addEventListener("touchend", e => {
-  if (touchStartX === null) return;
-  const deltaX = e.changedTouches[0].clientX - touchStartX;
-  if (Math.abs(deltaX) > swipeThreshold) {
-    if (deltaX > 0) player.x += moveSpeed * 3;
-    else player.x -= moveSpeed * 3;
-    if (player.x < 0) player.x = 0;
-    if (player.x + player.width > canvas.width)
-      player.x = canvas.width - player.width;
-  }
-  touchStartX = null;
-});
-
 loop();
 </script>
-
-
-
 </body>
 </html>
