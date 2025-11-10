@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Checkers</title>
   <style>
     body {
@@ -15,13 +15,21 @@
       padding: 20px;
       touch-action: none;
     }
-    h2 { margin-bottom: 0.5em; }
+    h2 { margin-bottom: 0.25em; }
+    .controls {
+      display:flex;
+      gap:12px;
+      align-items:center;
+      margin-bottom:10px;
+      flex-wrap:wrap;
+    }
     .board {
       display: grid;
       grid-template-columns: repeat(8, 10vmin);
       grid-template-rows: repeat(8, 10vmin);
       border: 5px solid #333;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      touch-action: none;
     }
     .square {
       width: 10vmin;
@@ -69,11 +77,52 @@
       margin-top: 5px;
       font-size: 1.1em;
     }
+    button { padding:6px 10px; font-size:1rem; }
+    label { font-size:0.95rem; }
+    select { padding:4px; }
+    .disabledOverlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.4);
+      display:none;
+      z-index: 50;
+      justify-content:center;
+      align-items:center;
+      font-weight:bold;
+      font-size:1.2rem;
+    }
   </style>
 </head>
 <body>
-  <h2>Checkers (Touch + Drag)</h2>
-  <div id="board" class="board"></div>
+  <h2>Checkers</h2>
+
+  <div class="controls">
+    <div>
+      <label><input type="radio" name="mode" value="2p" checked> 2 Player (pass the mouse)</label>
+      <label style="margin-left:8px"><input type="radio" name="mode" value="1p"> 1 Player vs AI</label>
+    </div>
+
+    <div>
+      <label>AI difficulty:
+        <select id="difficulty">
+          <option value="easy">Easy</option>
+          <option value="hard" selected>Hard</option>
+        </select>
+      </label>
+    </div>
+
+    <div>
+      <button id="newGameBtn">New Game</button>
+    </div>
+
+    <div id="thinking" style="margin-left:10px;font-weight:bold;display:none">AI thinking...</div>
+  </div>
+
+  <div id="boardWrap" style="position:relative">
+    <div id="board" class="board"></div>
+    <div id="overlay" class="disabledOverlay">Thinking...</div>
+  </div>
+
   <div class="info" id="turnInfo">Black's Turn</div>
   <div class="scores">Black Captures: <span id="blackScore">0</span> | Red Captures: <span id="redScore">0</span></div>
 
@@ -82,14 +131,22 @@
     const turnInfo = document.getElementById("turnInfo");
     const blackScoreEl = document.getElementById("blackScore");
     const redScoreEl = document.getElementById("redScore");
+    const modeRadios = document.getElementsByName("mode");
+    const newGameBtn = document.getElementById("newGameBtn");
+    const difficultySel = document.getElementById("difficulty");
+    const thinkingEl = document.getElementById("thinking");
+    const overlay = document.getElementById("overlay");
 
     const SIZE = 8;
-    let board = [];
+    let board = []; // {el} grid referencing DOM squares
     let currentPlayer = "black";
     let selected = null;
     let dragPiece = null;
     let scores = { red: 0, black: 0 };
+    let aiEnabled = false;
+    let aiThinking = false;
 
+    // --- initialize UI and logic ---
     function initBoard() {
       board = [];
       boardEl.innerHTML = "";
@@ -115,7 +172,13 @@
         }
         board.push(row);
       }
+      scores = { red: 0, black: 0 };
+      updateScores();
+      currentPlayer = "black";
+      turnInfo.textContent = `${capitalize(currentPlayer)}'s Turn`;
     }
+
+    function capitalize(s){ return s[0].toUpperCase()+s.slice(1); }
 
     function clearHighlights() {
       document.querySelectorAll(".valid-move").forEach(e => e.classList.remove("valid-move"));
@@ -123,6 +186,7 @@
     }
 
     function onSquareClick(e) {
+      if (aiThinking) return;
       const sq = e.currentTarget;
       const r = +sq.dataset.r, c = +sq.dataset.c;
       const piece = sq.querySelector(".piece");
@@ -132,12 +196,14 @@
         piece.classList.add("active");
         highlightMoves(r, c, piece);
       } else if (sq.classList.contains("valid-move") && selected) {
+        // if in 1P mode and it's player's turn, allow click
         makeMove(selected.r, selected.c, r, c);
       }
     }
 
     function inBounds(r, c) { return r >= 0 && r < SIZE && c >= 0 && c < SIZE; }
 
+    // Existing DOM-based getMoves (keeps compatibility for manual play)
     function getMoves(r, c, piece) {
       const dirs = [];
       if (piece.dataset.player === "black" || piece.classList.contains("king")) dirs.push([-1, -1], [-1, 1]);
@@ -165,6 +231,7 @@
       moves.forEach(m => board[m.r][m.c].el.classList.add("valid-move"));
     }
 
+    // --- Move execution for manual play --- //
     function makeMove(sr, sc, er, ec) {
       const startSq = board[sr][sc].el;
       const endSq = board[er][ec].el;
@@ -174,6 +241,7 @@
       const move = getMoves(sr, sc, piece).find(m => m.r === er && m.c === ec);
       if (!move) return;
 
+      // move piece in DOM
       startSq.innerHTML = "";
       endSq.appendChild(piece);
 
@@ -205,8 +273,10 @@
       selected = null;
       switchTurn();
       checkWin();
+      maybeAiMove();
     }
 
+    // Update score UI
     function updateScores() {
       blackScoreEl.textContent = scores.black;
       redScoreEl.textContent = scores.red;
@@ -214,18 +284,18 @@
 
     function switchTurn() {
       currentPlayer = currentPlayer === "black" ? "red" : "black";
-      turnInfo.textContent = `${currentPlayer[0].toUpperCase() + currentPlayer.slice(1)}'s Turn`;
+      turnInfo.textContent = `${capitalize(currentPlayer)}'s Turn`;
     }
 
     function checkWin() {
       const reds = [...document.querySelectorAll(".red-piece")].length;
       const blacks = [...document.querySelectorAll(".black-piece")].length;
       if (reds === 0 || blacks === 0) {
-        setTimeout(() => alert(`${reds === 0 ? "Black" : "Red"} Wins!`), 300);
+        setTimeout(() => alert(`${reds === 0 ? "Black" : "Red"} Wins!`), 250);
       }
     }
 
-    // Drag + Touch
+    // --- Drag + Touch (manual play) ---
     boardEl.addEventListener("mousedown", startDrag);
     boardEl.addEventListener("touchstart", startDrag, { passive: false });
     boardEl.addEventListener("mousemove", moveDrag);
@@ -234,6 +304,7 @@
     boardEl.addEventListener("touchend", endDrag);
 
     function startDrag(e) {
+      if (aiThinking) return;
       const piece = e.target.closest(".piece");
       if (!piece || piece.dataset.player !== currentPlayer) return;
       dragPiece = piece;
@@ -251,9 +322,10 @@
       const elem = document.elementFromPoint(touch.clientX, touch.clientY);
       dragPiece.style.pointerEvents = "";
       dragPiece.style.transform = "translate(-50%, -50%) scale(1.1)";
+      // highlight landing square under cursor as tentative
+      document.querySelectorAll(".tentative").forEach(el => el.classList.remove("tentative"));
       if (elem?.classList.contains("square")) {
-        clearHighlights();
-        elem.classList.add("valid-move");
+        elem.classList.add("tentative");
       }
     }
 
@@ -277,7 +349,297 @@
       clearHighlights();
     }
 
+    // --- New helper functions to support AI --- //
+    // Convert current DOM board to a simple state array:
+    // state[r][c] = null | { player: 'red'|'black', king: true|false }
+    function readStateFromDOM() {
+      const s = [];
+      for (let r = 0; r < SIZE; r++) {
+        const row = [];
+        for (let c = 0; c < SIZE; c++) {
+          const piece = board[r][c].el.querySelector(".piece");
+          if (!piece) row.push(null);
+          else row.push({ player: piece.dataset.player, king: piece.classList.contains("king") });
+        }
+        s.push(row);
+      }
+      return s;
+    }
+
+    // Apply a sequence of moves (array of [r,c] positions) directly to the DOM.
+    // Example seq: [[sr,sc],[r1,c1],[r2,c2]] for multi-jump
+    function applyMoveSequenceToDOM(seq) {
+      if (!seq || seq.length < 2) return;
+      const [sr, sc] = seq[0];
+      const startSq = board[sr][sc].el;
+      const piece = startSq.querySelector(".piece");
+      if (!piece) return;
+      startSq.innerHTML = "";
+      // perform each step
+      for (let i = 1; i < seq.length; i++) {
+        const [er, ec] = seq[i];
+        const prev = seq[i-1];
+        // if jump, remove mid piece
+        const dr = er - prev[0], dc = ec - prev[1];
+        if (Math.abs(dr) === 2 && Math.abs(dc) === 2) {
+          const mr = prev[0] + dr/2, mc = prev[1] + dc/2;
+          const midSq = board[mr][mc].el;
+          const captured = midSq.querySelector(".piece");
+          if (captured) {
+            midSq.innerHTML = "";
+            scores[piece.dataset.player] += 1;
+            updateScores();
+          }
+        }
+        // move piece element to destination
+        const dest = board[er][ec].el;
+        dest.appendChild(piece);
+      }
+      // promotion
+      const final = seq[seq.length-1];
+      const fr = final[0];
+      if ((piece.dataset.player === "black" && fr === 0) || (piece.dataset.player === "red" && fr === 7))
+        piece.classList.add("king");
+      clearHighlights();
+      selected = null;
+      switchTurn();
+      checkWin();
+      maybeAiMove();
+    }
+
+    // --- State-based move generation for AI (including full multi-jumps) --- //
+    // returns array of move sequences: each is array of [r,c] coords starting with source.
+    function getAllMovesFromState(state, player) {
+      const moves = [];
+      const piecePositions = [];
+      for (let r=0;r<SIZE;r++){
+        for (let c=0;c<SIZE;c++){
+          const p = state[r][c];
+          if (p && p.player === player) piecePositions.push([r,c,p.king]);
+        }
+      }
+      // first find any jumps (forced)
+      const jumpMoves = [];
+      for (const [r,c,king] of piecePositions) {
+        const seqs = findJumpsFrom(state, r, c, king);
+        for (const seq of seqs) jumpMoves.push([[r,c], ...seq]);
+      }
+      if (jumpMoves.length) return jumpMoves;
+      // otherwise normal moves
+      for (const [r,c,king] of piecePositions) {
+        const dirs = [];
+        if (player === "black" || king) dirs.push([-1,-1],[-1,1]);
+        if (player === "red" || king) dirs.push([1,-1],[1,1]);
+        for (const [dr,dc] of dirs) {
+          const nr = r+dr, nc = c+dc;
+          if (inBounds(nr,nc) && !state[nr][nc]) {
+            moves.push([[r,c],[nr,nc]]);
+          }
+        }
+      }
+      return moves;
+    }
+
+    // recursive function to find all jump sequences (returns arrays of positions excluding the source)
+    function findJumpsFrom(state, r, c, kingFlag) {
+      const results = [];
+      const player = state[r][c]?.player;
+      if (!player) return results;
+      const dirs = [];
+      if (player === "black" || kingFlag) dirs.push([-1,-1],[-1,1]);
+      if (player === "red" || kingFlag) dirs.push([1,-1],[1,1]);
+      let foundAny = false;
+      for (const [dr,dc] of dirs) {
+        const midr = r+dr, midc = c+dc;
+        const landr = r+dr*2, landc = c+dc*2;
+        if (inBounds(midr,midc) && inBounds(landr,landc)) {
+          const mid = state[midr][midc], land = state[landr][landc];
+          if (mid && mid.player !== player && !land) {
+            foundAny = true;
+            // simulate jump
+            const cloned = cloneState(state);
+            cloned[landr][landc] = { player: player, king: kingFlag || ( (player==='black' && landr===0) || (player==='red' && landr===7) ) };
+            cloned[r][c] = null;
+            cloned[midr][midc] = null;
+            // determine whether piece becomes king after landing (so subsequent jump directions might change)
+            const becameKing = cloned[landr][landc].king;
+            const subseqs = findJumpsFrom(cloned, landr, landc, becameKing);
+            if (subseqs.length) {
+              for (const sub of subseqs) results.push([[landr,landc], ...sub]);
+            } else {
+              results.push([[landr,landc]]);
+            }
+          }
+        }
+      }
+      return results;
+    }
+
+    function cloneState(s) {
+      const out = [];
+      for (let r=0;r<SIZE;r++){
+        out[r] = [];
+        for (let c=0;c<SIZE;c++){
+          const v = s[r][c];
+          out[r][c] = v ? { player: v.player, king: !!v.king } : null;
+        }
+      }
+      return out;
+    }
+
+    // --- AI: minimax with alpha-beta on the state representation --- //
+    function evaluateState(state, player) {
+      // simple eval: pieces + kings weight
+      let score = 0;
+      for (let r=0;r<SIZE;r++){
+        for (let c=0;c<SIZE;c++){
+          const p = state[r][c];
+          if (!p) continue;
+          const val = (p.king ? 3 : 1);
+          score += (p.player === player) ? val : -val;
+        }
+      }
+      return score;
+    }
+
+    function getOpponent(p){ return p === "black" ? "red" : "black"; }
+
+    function minimax(state, depth, maximizingPlayer, player, alpha, beta) {
+      if (depth === 0) {
+        return { score: evaluateState(state, player) };
+      }
+      const moves = getAllMovesFromState(state, maximizingPlayer ? player : getOpponent(player));
+      if (moves.length === 0) {
+        // no moves, losing state for side to move
+        return { score: maximizingPlayer ? -9999 : 9999 };
+      }
+      let bestMove = null;
+      if (maximizingPlayer) {
+        let maxEval = -Infinity;
+        for (const seq of moves) {
+          const newState = cloneState(state);
+          applySeqToState(newState, seq);
+          const res = minimax(newState, depth-1, false, player, alpha, beta);
+          if (res.score > maxEval) {
+            maxEval = res.score;
+            bestMove = seq;
+          }
+          alpha = Math.max(alpha, res.score);
+          if (beta <= alpha) break;
+        }
+        return { score: maxEval, move: bestMove };
+      } else {
+        let minEval = Infinity;
+        for (const seq of moves) {
+          const newState = cloneState(state);
+          applySeqToState(newState, seq);
+          const res = minimax(newState, depth-1, true, player, alpha, beta);
+          if (res.score < minEval) {
+            minEval = res.score;
+            bestMove = seq;
+          }
+          beta = Math.min(beta, res.score);
+          if (beta <= alpha) break;
+        }
+        return { score: minEval, move: bestMove };
+      }
+    }
+
+    // apply a move sequence to a state (mutates)
+    function applySeqToState(state, seq) {
+      const src = seq[0];
+      const piece = state[src[0]][src[1]];
+      if (!piece) return;
+      state[src[0]][src[1]] = null;
+      let lastR = src[0], lastC = src[1];
+      for (let i=1;i<seq.length;i++){
+        const [er,ec] = seq[i];
+        const dr = er - lastR, dc = ec - lastC;
+        if (Math.abs(dr) === 2 && Math.abs(dc) === 2) {
+          const mr = lastR + dr/2, mc = lastC + dc/2;
+          state[mr][mc] = null;
+        }
+        lastR = er; lastC = ec;
+      }
+      // place piece at final
+      state[lastR][lastC] = { player: piece.player, king: piece.king || ( (piece.player==='black' && lastR===0) || (piece.player==='red' && lastR===7) ) };
+    }
+
+    // --- AI move orchestration --- //
+    async function maybeAiMove() {
+      aiEnabled = [...modeRadios].find(r=>r.checked).value === "1p";
+      if (!aiEnabled) return;
+      if (currentPlayer !== "red") return; // let's make human play Black, AI play Red
+      // allow difficulty mapping
+      const diff = difficultySel.value;
+      const depth = diff === "easy" ? 2 : 5; // depth 5 for hard (balanced)
+      // read state
+      aiThinking = true;
+      overlay.style.display = 'flex';
+      thinkingEl.style.display = 'inline';
+      await new Promise(resolve => setTimeout(resolve, 60)); // let UI update
+      const state = readStateFromDOM();
+      const aiPlayer = "red";
+      // find moves
+      const moves = getAllMovesFromState(state, aiPlayer);
+      if (moves.length === 0) {
+        // no moves -> lose
+        aiThinking = false;
+        overlay.style.display = 'none';
+        thinkingEl.style.display = 'none';
+        return;
+      }
+      // run minimax
+      const t0 = performance.now();
+      const result = minimax(state, depth, true, aiPlayer, -Infinity, Infinity);
+      let chosen = result.move || moves[Math.floor(Math.random()*moves.length)];
+      // If minimax isn't returning move (edge), fallback to random
+      if (!chosen) chosen = moves[Math.floor(Math.random()*moves.length)];
+      // chosen is e.g. [[sr,sc],[r1,c1],...]
+      // apply move sequence to DOM
+      applyMoveSequenceToDOM(chosen);
+      aiThinking = false;
+      overlay.style.display = 'none';
+      thinkingEl.style.display = 'none';
+    }
+
+    // when switching modes, ensure AI won't unexpectedly move until mode is active
+    function maybeAiMoveWrapper() {
+      setTimeout(maybeAiMove, 60);
+    }
+
+    // --- Setup and event handlers --- //
+    newGameBtn.addEventListener("click", ()=> {
+      initBoard();
+      aiThinking = false;
+      overlay.style.display = 'none';
+      thinkingEl.style.display = 'none';
+    });
+
+    // mode radio changes
+    modeRadios.forEach(r => r.addEventListener("change", () => {
+      // in 1p, ensure black starts (player) and red is AI
+      const selectedMode = [...modeRadios].find(rr=>rr.checked).value;
+      if (selectedMode === "1p") {
+        // make sure Black is on human side (if currently red to move, switch to black start)
+        initBoard();
+      } else {
+        initBoard();
+      }
+    }));
+
+    // Kick off initial board
     initBoard();
+
+    // If user loads page with 1p mode selected we want AI to not move until human moves; maybeAiMove will only trigger when it's AI's turn after a player move.
+
+    // small hook: after manual move we invoked maybeAiMove() in makeMove and applyMoveSequenceToDOM already calls maybeAiMove.
+
+    // ensure clicks are ignored while overlay active
+    overlay.addEventListener("click", e => e.stopPropagation());
+
+    // expose a function to the console for debugging if desired
+    window._getState = () => readStateFromDOM();
   </script>
 </body>
 </html>
