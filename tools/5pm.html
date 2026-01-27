@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Time Zones at 5 PM</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 2rem; }
+  h1 { color: #333; }
+  #zones { margin-top: 1rem; }
+  .zone { padding: 4px 0; }
+  button { padding: 6px 12px; cursor: pointer; }
+</style>
+</head>
+<body>
+<h1>Time zones where it is currently 5:00 PM – 5:59 PM</h1>
+<button id="checkBtn">Refresh</button>
+<div id="zones"></div>
+
+<script type="module">
+  // Get the full list of IANA time‑zone identifiers supported by the browser.
+  const ianaZones = Intl.supportedValuesOf('timeZone');
+
+  /** Return an array of zone names where the current hour is 17 (5 PM). */
+  function zonesAt5pm() {
+    const now = new Date();               // current moment in UTC
+    const matching = [];
+
+    for (const zone of ianaZones) {
+      try {
+        // Use Intl.DateTimeFormat to obtain the hour in the target zone.
+        const hour = Number(
+          new Intl.DateTimeFormat('en-US', {
+            timeZone: zone,
+            hour: 'numeric',
+            hour12: false
+          })
+            .formatToParts(now)
+            .find(p => p.type === 'hour')
+            .value
+        );
+
+        if (hour === 17) matching.push(zone);
+      } catch (_) {
+        // If the zone is somehow unsupported, skip it.
+      }
+    }
+    return matching;
+  }
+
+  /** Render the list into the page. */
+  function render() {
+    const container = document.getElementById('zones');
+    const zones = zonesAt5pm();
+
+    container.innerHTML = zones.length
+      ? zones.map(z => `<div class="zone">${z}</div>`).join('')
+      : '<p>No zones currently at 5 PM.</p>';
+  }
+
+  document.getElementById('checkBtn').addEventListener('click', render);
+  // Initial display
+  render();
+</script>
+</body>
+</html>
