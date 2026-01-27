@@ -17,9 +17,3 @@ permalink: /:basename/
 kramdown:
   # Instructs kramdown to parse HTML blocks for Jekyll Liquid variables.
   parse_block_html: true
-on: 
-  workflow_dispatch:
-    paths-ignore:
-      - .gitignore
-      - README.md
-      - LICENSE
