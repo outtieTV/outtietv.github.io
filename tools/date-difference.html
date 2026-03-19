@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Date‑Difference Calculator</title>
+<style>
+:root{
+  --bg:#fff; --fg:#000; --accent:#0066ff;
+}
+[data-theme="dark"]{
+  --bg:#121212; --fg:#e0e0e0; --accent:#3399ff;
+}
+body{
+  margin:0; font-family:system-ui,Arial,sans-serif;
+  background:var(--bg); color:var(--fg);
+  display:flex; flex-direction:column; align-items:center;
+  min-height:100vh; padding:1rem;
+}
+header{
+  width:100%; display:flex; justify-content:flex-end;
+}
+button.toggle{
+  background:none; border:none; color:var(--accent);
+  font-size:1rem; cursor:pointer; margin:0.5rem;
+}
+.container{
+  max-width:420px; width:100%; background:rgba(0,0,0,0.03);
+  padding:1.5rem; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.1);
+}
+label{display:block;margin-top:0.8rem;}
+input, select{width:100%; padding:0.4rem; margin-top:0.2rem;
+  border:1px solid #ccc; border-radius:4px; background:var(--bg);
+  color:var(--fg);
+}
+button.calc{
+  margin-top:1rem; width:100%; padding:0.6rem;
+  background:var(--accent); color:#fff; border:none;
+  border-radius:4px; cursor:pointer; font-weight:600;
+}
+.result{margin-top:1rem; font-size:1.1rem;}
+.disabled{opacity:0.5; pointer-events:none;}
+</style>
+</head>
+<body>
+<header>
+  <button class="toggle" aria-label="Toggle light/dark mode">🌙</button>
+</header>
+
+<div class="container">
+  <h2>Date‑Difference Calculator</h2>
+
+  <label>
+    <input type="checkbox" id="localTz" checked> Use **local** timezone
+  </label>
+
+  <label for="tz">Timezone (disabled when “local” is checked)</label>
+  <select id="tz" disabled class="disabled"></select>
+
+  <label for="start">Start date</label>
+  <input type="date" id="start">
+
+  <label for="end">End date (or leave empty for “today”)</label>
+  <input type="date" id="end">
+
+  <button class="calc">Calculate</button>
+
+  <div class="result" id="out"></div>
+</div>
+
+<script>
+/* ---------- Theme toggle ---------- */
+const toggleBtn = document.querySelector('.toggle');
+const setTheme = t => {
+  document.documentElement.dataset.theme = t;
+  toggleBtn.textContent = t === 'dark' ? '☀️' : '🌙';
+};
+toggleBtn.addEventListener('click', () => {
+  setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+});
+setTheme('light');
+
+/* ---------- Populate timezone list ---------- */
+const tzSelect = document.getElementById('tz');
+if (Intl.supportedValuesOf) {
+  Intl.supportedValuesOf('timeZone').forEach(tz => {
+    const opt = document.createElement('option');
+    opt.value = tz; opt.textContent = tz;
+    tzSelect.appendChild(opt);
+  });
+} else {
+  ['UTC','America/New_York','Europe/London','Asia/Tokyo'].forEach(tz=>{
+    const opt=document.createElement('option');opt.value=tz;opt.textContent=tz;
+    tzSelect.appendChild(opt);
+  });
+}
+
+/* ---------- Local‑timezone checkbox handling ---------- */
+const localChk = document.getElementById('localTz');
+localChk.addEventListener('change', () => {
+  if (localChk.checked) {
+    tzSelect.disabled = true;
+    tzSelect.classList.add('disabled');
+  } else {
+    tzSelect.disabled = false;
+    tzSelect.classList.remove('disabled');
+  }
+});
+
+/* ---------- Human‑readable diff with correct boundaries ---------- */
+function fullHumanDiff(ms) {
+  // Round to nearest whole day – avoids DST‑related off‑by‑one errors
+  const days = Math.round(ms / (1000 * 60 * 60 * 24));
+
+  /* ---- weeks ---- */
+  if (days < 7) return 'less than a week ago';
+  const weeks = Math.trunc(days / 7);
+  const remWeek = days % 7;
+  if (remWeek === 0) return `${weeks} week${weeks > 1 ? 's' : ''} ago`;
+  if (weeks < 4) return `more than ${weeks} week${weeks > 1 ? 's' : ''} ago`;
+
+  /* ---- months ---- */
+  if (days < 30) return 'less than a month ago';
+  const months = Math.trunc(days / 30);
+  const remMonth = days % 30;
+  if (remMonth === 0) return `${months} month${months > 1 ? 's' : ''} ago`;
+  if (months < 12) return `more than ${months} month${months > 1 ? 's' : ''} ago`;
+
+  /* ---- years ---- */
+  if (days < 365) return 'less than a year ago';
+  const years = Math.trunc(days / 365);
+  const remYear = days % 365;
+  if (remYear === 0) return `${years} year${years > 1 ? 's' : ''} ago`;
+  return `more than ${years} year${years > 1 ? 's' : ''} ago`;
+}
+
+/* ---------- Main calculation ---------- */
+document.querySelector('.calc').addEventListener('click', () => {
+  const useLocal = localChk.checked;
+  const tz = useLocal
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+    : (tzSelect.value || 'UTC');
+
+  const startVal = document.getElementById('start').value;
+  const endVal   = document.getElementById('end').value;
+
+  if (!startVal) {
+    document.getElementById('out').textContent = 'Please pick a start date.';
+    return;
+  }
+
+  // Convert ISO date (yyyy‑mm‑dd) to a Date interpreted in the chosen timezone
+  const toDate = iso => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      year: 'numeric', month: 'numeric', day: 'numeric'
+    }).formatToParts(new Date(iso));
+    const y = parts.find(p => p.type === 'year').value;
+    const m = parts.find(p => p.type === 'month').value;
+    const d = parts.find(p => p.type === 'day').value;
+    return new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T00:00:00`);
+  };
+
+  const startDate = toDate(startVal);
+  const endDate   = endVal ? toDate(endVal) : new Date(); // today
+
+  const diffMs = endDate - startDate;
+  if (isNaN(diffMs)) {
+    document.getElementById('out').textContent = 'Invalid dates.';
+    return;
+  }
+
+  const daysDiff = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  const human = fullHumanDiff(diffMs);
+  document.getElementById('out').innerHTML =
+    `<strong>${daysDiff}</strong> days ago (${human})`;
+});
+</script>
+</body>
+</html>
