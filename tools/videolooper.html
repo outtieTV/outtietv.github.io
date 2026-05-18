@@ -4,125 +4,292 @@
 <meta charset="UTF-8">
 <title>YouTube Video Looper</title>
 <style>
-  body{font-family:sans-serif;background:#f9f9f9;margin:0;padding:2rem;}
-  #player{max-width:100%;margin:1rem 0;}
-  .controls{display:flex;gap:.5rem;flex-wrap:wrap;}
-  .controls input{padding:.4rem;font-size:1rem;width:10rem;}
-  .controls button{padding:.4rem .8rem;font-size:1rem;cursor:pointer;}
+/* -------------------------------------------------
+   1️⃣ Global page theme
+   ------------------------------------------------- */
+html,body{
+  height:100%;
+  margin:0;
+  font-family:system-ui,Helvetica,Arial,sans-serif;
+  background:linear-gradient(135deg,#e0f7fa,#fff3e0);
+  color:#333;
+}
+
+/* -------------------------------------------------
+   2️⃣ Layout containers
+   ------------------------------------------------- */
+.page-wrapper{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding:2rem;
+}
+
+/* Header – a simple hero bar */
+header{
+  width:100%;
+  max-width:960px;
+  text-align:center;
+  margin-bottom:1.5rem;
+}
+header h1{
+  margin:0;
+  font-size:2.2rem;
+  color:#0066cc;
+}
+
+/* The “card” that holds all interactive UI */
+.card{
+  background:#fff;
+  border-radius:12px;
+  box-shadow:0 4px 12px rgba(0,0,0,0.08);
+  padding:2rem;
+  width:100%;
+  max-width:500px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:1.2rem;
+}
+
+/* Footer – small credits */
+footer{
+  margin-top:2rem;
+  font-size:0.9rem;
+  color:#666;
+}
+
+/* -------------------------------------------------
+   3️⃣ Form elements
+   ------------------------------------------------- */
+input[type=text]{
+  width:100%;
+  padding:.6rem;
+  font-size:1rem;
+  border:1px solid #bbb;
+  border-radius:6px;
+}
+button{
+  padding:.6rem 1.2rem;
+  font-size:1rem;
+  background:#0066cc;
+  color:#fff;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+  transition:background .2s;
+}
+button:hover{background:#004999;}
+
+/* -------------------------------------------------
+   4️⃣ Slider groups
+   ------------------------------------------------- */
+.slider-group{
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+.slider-group label{
+  font-weight:600;
+  margin-bottom:.3rem;
+  color:#555;
+}
+.slider-group input[type=range]{
+  width:100%;
+  -webkit-appearance:none;
+  background:#ddd;
+  height:6px;
+  border-radius:3px;
+  outline:none;
+}
+.slider-group input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  appearance:none;
+  width:14px;
+  height:14px;
+  background:#0066cc;
+  border-radius:50%;
+  cursor:pointer;
+  transition:background .2s;
+}
+.slider-group input[type=range]::-webkit-slider-thumb:hover{
+  background:#004999;
+}
+.time-label{
+  margin-top:.4rem;
+  font-family:monospace;
+  font-size:1rem;
+  color:#222;
+}
+
+/* -------------------------------------------------
+   5️⃣ Player container
+   ------------------------------------------------- */
+#player{
+  margin-top:1.5rem;
+}
 </style>
 </head>
 <body>
 
-<h1>YouTube Video Looper</h1>
+<div class="page-wrapper">
 
-<div class="controls">
-  <input id="urlInput"  placeholder="YouTube URL or ID" />
-  <input id="startInput" placeholder="Start (seconds)" type="number" min="0"/>
-  <input id="endInput"   placeholder="End (seconds)"   type="number" min="0"/>
-  <button id="loadBtn">Load &amp; Loop</button>
+  <header>
+    <h1>YouTube Video Looper</h1>
+  </header>
+
+  <section class="card">
+    <!-- ① Video URL -->
+    <input id="urlInput" type="text" placeholder="YouTube URL or video ID">
+
+    <!-- ② Load button -->
+    <button id="loadBtn">Load video</button>
+
+    <!-- ③ Start slider -->
+    <div class="slider-group">
+      <label for="startSlider">Start time</label>
+      <input id="startSlider" type="range" min="0" max="0" value="0">
+      <div class="time-label" id="startLabel">00:00</div>
+    </div>
+
+    <!-- ④ End slider -->
+    <div class="slider-group">
+      <label for="endSlider">End time</label>
+      <input id="endSlider" type="range" min="0" max="0" value="0">
+      <div class="time-label" id="endLabel">00:00</div>
+    </div>
+  </section>
+
+  <!-- ⑤ YouTube player -->
+  <div id="player"></div>
+
+  <footer>
+    Made with ❤️ by outtieTV &nbsp;|&nbsp;
+  </footer>
 </div>
 
-<div id="player"></div>
-
 <script>
-/* ---------- Helper: read / write URL parameters ---------- */
-function getParam(name) {
-  const params = new URLSearchParams(location.search);
-  return params.get(name);
-}
-function setParams(params) {
-  const url = new URL(location);
-  Object.entries(params).forEach(([k, v]) => {
-    if (v === null || v === '') url.searchParams.delete(k);
-    else url.searchParams.set(k, v);
-  });
-  history.replaceState(null, '', url);
+/* ---------- Helper: URL parameters ---------- */
+function getParam(name){return new URLSearchParams(location.search).get(name);}
+function setParams(p){
+  const u=new URL(location);
+  Object.entries(p).forEach(([k,v])=>v?u.searchParams.set(k,v):u.searchParams.delete(k));
+  history.replaceState(null,'',u);
 }
 
-/* ---------- Extract video ID from any YouTube URL ---------- */
-function extractVideoId(url) {
-  // Direct ID or typical YouTube link formats
-  const idMatch = url.match(/(?:youtube\.com\/.*[?&]v=|youtu\.be\/)([^&#?]+)/i);
-  return idMatch ? idMatch[1] : url.trim(); // fall back to raw text
+/* ---------- Extract YouTube ID ---------- */
+function extractVideoId(str){
+  const m=str.match(/(?:youtube\.com\/.*[?&]v=|youtu\.be\/)([^&#?]+)/i);
+  return m?m[1]:str.trim();
 }
 
 /* ---------- Load YouTube Iframe API ---------- */
-function loadYouTubeAPI(callback) {
-  if (window.YT && YT.Player) {callback(); return;}
-  const tag = document.createElement('script');
-  tag.src = "https://www.youtube.com/iframe_api";
-  const first = document.getElementsByTagName('script')[0];
-  first.parentNode.insertBefore(tag, first);
-  window.onYouTubeIframeAPIReady = callback;
+function loadYouTubeAPI(cb){
+  if(window.YT && YT.Player) return cb();
+  const s=document.createElement('script');
+  s.src="https://www.youtube.com/iframe_api";
+  document.head.appendChild(s);
+  window.onYouTubeIframeAPIReady=cb;
 }
 
-/* ---------- Player logic ---------- */
-let player, loopStart = 0, loopEnd = 0;
+/* ---------- Global state ---------- */
+let player, videoDuration=0;
+let startSec=0, endSec=0;
 
-function createPlayer(videoId) {
-  if (player) player.loadVideoById({ videoId, startSeconds: loopStart, endSeconds: loopEnd });
-  else {
-    player = new YT.Player('player', {
-      height: '390',
-      width:  '640',
-      videoId,
-      playerVars: { autoplay: 1, controls: 1, modestbranding: 1 },
-      events: {
-        onReady: () => player.seekTo(loopStart, true),
-        onStateChange: e => {
-          if (e.data === YT.PlayerState.PLAYING) {
-            // poll every 200 ms to see if we passed the end time
-            const check = setInterval(() => {
-              const curr = player.getCurrentTime();
-              if (loopEnd && curr >= loopEnd) {
-                player.seekTo(loopStart, true);
-              }
-            }, 200);
-            // stop polling when video pauses or ends
-            const stop = () => clearInterval(check);
-            player.addEventListener('onStateChange', ev => {
-              if (ev.data !== YT.PlayerState.PLAYING) stop();
-            });
-          }
-        }
-      }
-    });
+/* ---------- Seconds ⇔ mm:ss ---------- */
+function secToLabel(s){
+  const m=Math.floor(s/60), sec=Math.floor(s%60);
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+
+/* ---------- Player creation / update ---------- */
+function createPlayer(id){
+  if(player){
+    player.loadVideoById({videoId:id,startSeconds:startSec,endSeconds:endSec});
+    return;
   }
+  player=new YT.Player('player',{
+    height:'390',
+    width:'640',
+    videoId:id,
+    playerVars:{autoplay:1,modestbranding:1},
+    events:{
+      onReady:()=>{videoDuration=player.getDuration();initSliders();player.seekTo(startSec,true);},
+      onStateChange:e=>{if(e.data===YT.PlayerState.PLAYING) startLoop();}
+    }
+  });
 }
 
-/* ---------- UI handling ---------- */
-function initFromURL() {
-  const urlParam = getParam('v');
-  const startParam = parseFloat(getParam('start_time')) || 0;
-  const endParam   = parseFloat(getParam('end_time'))  || 0;
+/* ---------- Loop logic ---------- */
+let loopTimer=null;
+function startLoop(){
+  clearInterval(loopTimer);
+  loopTimer=setInterval(()=>{const t=player.getCurrentTime();if(endSec && t>=endSec)player.seekTo(startSec,true);},200);
+}
 
-  if (urlParam) {
-    document.getElementById('urlInput').value   = urlParam;
-    document.getElementById('startInput').value = startParam;
-    document.getElementById('endInput').value   = endParam;
-    loadVideo(urlParam, startParam, endParam);
+/* ---------- Slider init & UI sync ---------- */
+function initSliders(){
+  const startS=document.getElementById('startSlider');
+  const endS=document.getElementById('endSlider');
+  const startL=document.getElementById('startLabel');
+  const endL=document.getElementById('endLabel');
+
+  startS.max=endS.max=Math.floor(videoDuration);
+  startS.value=startSec;
+  endS.value=endSec||Math.floor(videoDuration);
+
+  startL.textContent=secToLabel(startSec);
+  endL.textContent=secToLabel(endSec||videoDuration);
+}
+
+/* ---------- Slider event listeners ---------- */
+document.getElementById('startSlider').addEventListener('input',e=>{
+  startSec=Number(e.target.value);
+  document.getElementById('startLabel').textContent=secToLabel(startSec);
+  if(endSec && startSec>endSec){
+    endSec=startSec;
+    const es=document.getElementById('endSlider');
+    es.value=endSec;
+    document.getElementById('endLabel').textContent=secToLabel(endSec);
   }
-}
-
-function loadVideo(rawUrl, start, end) {
-  const videoId = extractVideoId(rawUrl);
-  loopStart = Math.max(0, start);
-  loopEnd   = end > 0 ? end : 0;          // 0 means “no explicit end”
-  setParams({ v: videoId, start_time: loopStart, end_time: loopEnd });
-  loadYouTubeAPI(() => createPlayer(videoId));
-}
-
-/* ---------- Event listeners ---------- */
-document.getElementById('loadBtn').addEventListener('click', () => {
-  const url   = document.getElementById('urlInput').value.trim();
-  const start = parseFloat(document.getElementById('startInput').value) || 0;
-  const end   = parseFloat(document.getElementById('endInput').value)   || 0;
-  if (!url) return alert('Please enter a video URL or ID.');
-  loadVideo(url, start, end);
+  setParams({start_time:startSec});
 });
 
-/* ---------- Initialise on page load ---------- */
-initFromURL();
+document.getElementById('endSlider').addEventListener('input',e=>{
+  endSec=Number(e.target.value);
+  document.getElementById('endLabel').textContent=secToLabel(endSec);
+  if(endSec<startSec){
+    startSec=endSec;
+    const ss=document.getElementById('startSlider');
+    ss.value=startSec;
+    document.getElementById('startLabel').textContent=secToLabel(startSec);
+  }
+  setParams({end_time:endSec});
+});
+
+/* ---------- Load button ---------- */
+document.getElementById('loadBtn').addEventListener('click',()=>{
+  const raw=document.getElementById('urlInput').value.trim();
+  if(!raw) return alert('Enter a YouTube URL or video ID.');
+  const vid=extractVideoId(raw);
+  // keep any start/end already present in URL
+  startSec=parseFloat(getParam('start_time'))||0;
+  endSec=parseFloat(getParam('end_time'))||0;
+  setParams({v:vid,start_time:startSec,end_time:endSec});
+  loadYouTubeAPI(()=>createPlayer(vid));
+});
+
+/* ---------- Auto‑load from URL on page open ---------- */
+(function initFromURL(){
+  const vid=getParam('v');
+  if(!vid) return;
+  document.getElementById('urlInput').value=vid;
+  startSec=parseFloat(getParam('start_time'))||0;
+  endSec=parseFloat(getParam('end_time'))||0;
+  loadYouTubeAPI(()=>createPlayer(vid));
+})();
 </script>
+
 </body>
 </html>
