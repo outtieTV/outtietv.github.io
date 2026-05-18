@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>YouTube Video Looper</title>
+<style>
+  body{font-family:sans-serif;background:#f9f9f9;margin:0;padding:2rem;}
+  #player{max-width:100%;margin:1rem 0;}
+  .controls{display:flex;gap:.5rem;flex-wrap:wrap;}
+  .controls input{padding:.4rem;font-size:1rem;width:10rem;}
+  .controls button{padding:.4rem .8rem;font-size:1rem;cursor:pointer;}
+</style>
+</head>
+<body>
+
+<h1>YouTube Video Looper</h1>
+
+<div class="controls">
+  <input id="urlInput"  placeholder="YouTube URL or ID" />
+  <input id="startInput" placeholder="Start (seconds)" type="number" min="0"/>
+  <input id="endInput"   placeholder="End (seconds)"   type="number" min="0"/>
+  <button id="loadBtn">Load &amp; Loop</button>
+</div>
+
+<div id="player"></div>
+
+<script>
+/* ---------- Helper: read / write URL parameters ---------- */
+function getParam(name) {
+  const params = new URLSearchParams(location.search);
+  return params.get(name);
+}
+function setParams(params) {
+  const url = new URL(location);
+  Object.entries(params).forEach(([k, v]) => {
+    if (v === null || v === '') url.searchParams.delete(k);
+    else url.searchParams.set(k, v);
+  });
+  history.replaceState(null, '', url);
+}
+
+/* ---------- Extract video ID from any YouTube URL ---------- */
+function extractVideoId(url) {
+  // Direct ID or typical YouTube link formats
+  const idMatch = url.match(/(?:youtube\.com\/.*[?&]v=|youtu\.be\/)([^&#?]+)/i);
+  return idMatch ? idMatch[1] : url.trim(); // fall back to raw text
+}
+
+/* ---------- Load YouTube Iframe API ---------- */
+function loadYouTubeAPI(callback) {
+  if (window.YT && YT.Player) {callback(); return;}
+  const tag = document.createElement('script');
+  tag.src = "https://www.youtube.com/iframe_api";
+  const first = document.getElementsByTagName('script')[0];
+  first.parentNode.insertBefore(tag, first);
+  window.onYouTubeIframeAPIReady = callback;
+}
+
+/* ---------- Player logic ---------- */
+let player, loopStart = 0, loopEnd = 0;
+
+function createPlayer(videoId) {
+  if (player) player.loadVideoById({ videoId, startSeconds: loopStart, endSeconds: loopEnd });
+  else {
+    player = new YT.Player('player', {
+      height: '390',
+      width:  '640',
+      videoId,
+      playerVars: { autoplay: 1, controls: 1, modestbranding: 1 },
+      events: {
+        onReady: () => player.seekTo(loopStart, true),
+        onStateChange: e => {
+          if (e.data === YT.PlayerState.PLAYING) {
+            // poll every 200 ms to see if we passed the end time
+            const check = setInterval(() => {
+              const curr = player.getCurrentTime();
+              if (loopEnd && curr >= loopEnd) {
+                player.seekTo(loopStart, true);
+              }
+            }, 200);
+            // stop polling when video pauses or ends
+            const stop = () => clearInterval(check);
+            player.addEventListener('onStateChange', ev => {
+              if (ev.data !== YT.PlayerState.PLAYING) stop();
+            });
+          }
+        }
+      }
+    });
+  }
+}
+
+/* ---------- UI handling ---------- */
+function initFromURL() {
+  const urlParam = getParam('v');
+  const startParam = parseFloat(getParam('start_time')) || 0;
+  const endParam   = parseFloat(getParam('end_time'))  || 0;
+
+  if (urlParam) {
+    document.getElementById('urlInput').value   = urlParam;
+    document.getElementById('startInput').value = startParam;
+    document.getElementById('endInput').value   = endParam;
+    loadVideo(urlParam, startParam, endParam);
+  }
+}
+
+function loadVideo(rawUrl, start, end) {
+  const videoId = extractVideoId(rawUrl);
+  loopStart = Math.max(0, start);
+  loopEnd   = end > 0 ? end : 0;          // 0 means “no explicit end”
+  setParams({ v: videoId, start_time: loopStart, end_time: loopEnd });
+  loadYouTubeAPI(() => createPlayer(videoId));
+}
+
+/* ---------- Event listeners ---------- */
+document.getElementById('loadBtn').addEventListener('click', () => {
+  const url   = document.getElementById('urlInput').value.trim();
+  const start = parseFloat(document.getElementById('startInput').value) || 0;
+  const end   = parseFloat(document.getElementById('endInput').value)   || 0;
+  if (!url) return alert('Please enter a video URL or ID.');
+  loadVideo(url, start, end);
+});
+
+/* ---------- Initialise on page load ---------- */
+initFromURL();
+</script>
+</body>
+</html>

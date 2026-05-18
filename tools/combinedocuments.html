@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Combine Files with Headers</title>
+  <style>
+    body{font-family:sans-serif;margin:2rem;}
+    h1{margin-bottom:.5rem;}
+    #log{
+      background:#f8f8f8;padding:1rem;border:1px solid #ddd;
+      max-height:200px;overflow:auto;white-space:pre-wrap;
+    }
+    button[disabled]{opacity:.5;cursor:not-allowed;}
+  </style>
+</head>
+<body>
+  <h1>Combine Files (with per‑file headers)</h1>
+
+  <!-- Allow any file type; also show *.txt as a convenient filter -->
+  <input type="file" id="fileInput" multiple accept=".txt,*/*">
+  <button id="combineBtn" disabled>Combine &amp; Download</button>
+
+  <pre id="log"></pre>
+
+  <script>
+    const fileInput   = document.getElementById('fileInput');
+    const combineBtn  = document.getElementById('combineBtn');
+    const log         = document.getElementById('log');
+    let files = [];
+
+    // Enable button when files are chosen
+    fileInput.addEventListener('change', () => {
+      files = Array.from(fileInput.files);
+      combineBtn.disabled = files.length === 0;
+      log.textContent = `${files.length} file(s) selected.`;
+    });
+
+    // Main combine routine
+    combineBtn.addEventListener('click', async () => {
+      combineBtn.disabled = true;
+      log.textContent = 'Reading files…';
+
+      const parts = await Promise.all(
+        files.map(async f => {
+          const text = await readFileAsText(f);
+          // Header using double‑slash comment syntax
+          const header = `//${f.name}\n`;
+          return header + text + '\n';   // ensure a trailing newline
+        })
+      );
+
+      const combined = parts.join('\n'); // extra blank line between files
+      const blob = new Blob([combined], {type: 'text/plain'});
+      const url  = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'combined.txt';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      log.textContent = `✅ Combined ${files.length} file(s) and downloaded.`;
+      combineBtn.disabled = false;
+    });
+
+    // Helper: read a File as plain text (UTF‑8)
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = e => reject(e);
+        reader.readAsText(file);
+      });
+    }
+  </script>
+</body>
+</html>
