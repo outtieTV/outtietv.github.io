@@ -4,156 +4,56 @@
 <meta charset="UTF-8">
 <title>YouTube Video Looper</title>
 <style>
-/* -------------------------------------------------
-   1️⃣ Global page theme
-   ------------------------------------------------- */
 html,body{
-  height:100%;
-  margin:0;
+  height:100%;margin:0;
   font-family:system-ui,Helvetica,Arial,sans-serif;
   background:linear-gradient(135deg,#e0f7fa,#fff3e0);
   color:#333;
 }
-
-/* -------------------------------------------------
-   2️⃣ Layout containers
-   ------------------------------------------------- */
-.page-wrapper{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  padding:2rem;
-}
-
-/* Header – a simple hero bar */
-header{
-  width:100%;
-  max-width:960px;
-  text-align:center;
-  margin-bottom:1.5rem;
-}
-header h1{
-  margin:0;
-  font-size:2.2rem;
-  color:#0066cc;
-}
-
-/* The “card” that holds all interactive UI */
+.page-wrapper{display:flex;flex-direction:column;align-items:center;padding:2rem;}
+header{width:100%;max-width:960px;text-align:center;margin-bottom:1.5rem;}
+header h1{margin:0;font-size:2.2rem;color:#0066cc;}
 .card{
-  background:#fff;
-  border-radius:12px;
-  box-shadow:0 4px 12px rgba(0,0,0,0.08);
-  padding:2rem;
-  width:100%;
-  max-width:500px;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:1.2rem;
+  background:#fff;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.08);
+  padding:2rem;width:100%;max-width:500px;display:flex;flex-direction:column;
+  align-items:center;gap:1.2rem;
 }
-
-/* Footer – small credits */
-footer{
-  margin-top:2rem;
-  font-size:0.9rem;
-  color:#666;
-}
-
-/* -------------------------------------------------
-   3️⃣ Form elements
-   ------------------------------------------------- */
-input[type=text]{
-  width:100%;
-  padding:.6rem;
-  font-size:1rem;
-  border:1px solid #bbb;
-  border-radius:6px;
-}
+footer{margin-top:2rem;font-size:0.9rem;color:#666;}
+input[type=text]{width:100%;padding:.6rem;font-size:1rem;border:1px solid #bbb;border-radius:6px;}
 button{
-  padding:.6rem 1.2rem;
-  font-size:1rem;
-  background:#0066cc;
-  color:#fff;
-  border:none;
-  border-radius:6px;
-  cursor:pointer;
-  transition:background .2s;
+  padding:.6rem 1.2rem;font-size:1rem;background:#0066cc;color:#fff;
+  border:none;border-radius:6px;cursor:pointer;transition:background .2s;
 }
 button:hover{background:#004999;}
-
-/* -------------------------------------------------
-   4️⃣ Slider groups
-   ------------------------------------------------- */
-.slider-group{
-  width:100%;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-}
-.slider-group label{
-  font-weight:600;
-  margin-bottom:.3rem;
-  color:#555;
-}
+.slider-group{width:100%;display:flex;flex-direction:column;align-items:center;}
+.slider-group label{font-weight:600;margin-bottom:.3rem;color:#555;}
 .slider-group input[type=range]{
-  width:100%;
-  -webkit-appearance:none;
-  background:#ddd;
-  height:6px;
-  border-radius:3px;
-  outline:none;
+  width:100%;-webkit-appearance:none;background:#ddd;height:6px;border-radius:3px;outline:none;
 }
 .slider-group input[type=range]::-webkit-slider-thumb{
-  -webkit-appearance:none;
-  appearance:none;
-  width:14px;
-  height:14px;
-  background:#0066cc;
-  border-radius:50%;
-  cursor:pointer;
-  transition:background .2s;
+  -webkit-appearance:none;appearance:none;width:14px;height:14px;
+  background:#0066cc;border-radius:50%;cursor:pointer;transition:background .2s;
 }
-.slider-group input[type=range]::-webkit-slider-thumb:hover{
-  background:#004999;
-}
-.time-label{
-  margin-top:.4rem;
-  font-family:monospace;
-  font-size:1rem;
-  color:#222;
-}
-
-/* -------------------------------------------------
-   5️⃣ Player container
-   ------------------------------------------------- */
-#player{
-  margin-top:1.5rem;
-}
+.slider-group input[type=range]::-webkit-slider-thumb:hover{background:#004999;}
+.time-label{margin-top:.4rem;font-family:monospace;font-size:1rem;color:#222;}
+#player{margin-top:1.5rem;}
 </style>
 </head>
 <body>
 
 <div class="page-wrapper">
-
-  <header>
-    <h1>YouTube Video Looper</h1>
-  </header>
+  <header><h1>YouTube Video Looper</h1></header>
 
   <section class="card">
-    <!-- ① Video URL -->
     <input id="urlInput" type="text" placeholder="YouTube URL or video ID">
-
-    <!-- ② Load button -->
     <button id="loadBtn">Load video</button>
 
-    <!-- ③ Start slider -->
     <div class="slider-group">
       <label for="startSlider">Start time</label>
       <input id="startSlider" type="range" min="0" max="0" value="0">
       <div class="time-label" id="startLabel">00:00</div>
     </div>
 
-    <!-- ④ End slider -->
     <div class="slider-group">
       <label for="endSlider">End time</label>
       <input id="endSlider" type="range" min="0" max="0" value="0">
@@ -161,16 +61,13 @@ button:hover{background:#004999;}
     </div>
   </section>
 
-  <!-- ⑤ YouTube player -->
   <div id="player"></div>
 
-  <footer>
-    Made with ❤️ by outtieTV
-  </footer>
+  <footer>Made with ❤️ by outtieTV</footer>
 </div>
 
 <script>
-/* ---------- Helper: URL parameters ---------- */
+/* ---------- URL helpers ---------- */
 function getParam(name){return new URLSearchParams(location.search).get(name);}
 function setParams(p){
   const u=new URL(location);
@@ -197,35 +94,48 @@ function loadYouTubeAPI(cb){
 let player, videoDuration=0;
 let startSec=0, endSec=0;
 
-/* ---------- Seconds ⇔ mm:ss ---------- */
+/* ---------- Seconds <-> mm:ss ---------- */
 function secToLabel(s){
   const m=Math.floor(s/60), sec=Math.floor(s%60);
   return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
 }
 
-/* ---------- Player creation / update ---------- */
+/* ---------- Create / update player ---------- */
 function createPlayer(id){
   if(player){
     player.loadVideoById({videoId:id,startSeconds:startSec,endSeconds:endSec});
     return;
   }
-  player=new YT.Player('player',{
-    height:'390',
-    width:'640',
-    videoId:id,
+
+  player = new YT.Player('player',{
+    height:'390',width:'640',videoId:id,
     playerVars:{autoplay:1,modestbranding:1},
     events:{
-      onReady:()=>{videoDuration=player.getDuration();initSliders();player.seekTo(startSec,true);},
-      onStateChange:e=>{if(e.data===YT.PlayerState.PLAYING) startLoop();}
+      onReady:()=>{                     // when the iframe is ready
+        videoDuration = player.getDuration();
+
+        /* default to full video if no end supplied */
+        if(!endSec) endSec = Math.floor(videoDuration);
+
+        initSliders();
+        player.seekTo(startSec,true);
+      },
+
+      /* -------------------------------------------------
+         NEW: use ENDED state to force a loop
+         ------------------------------------------------- */
+      onStateChange:e=>{
+        if (e.data === YT.PlayerState.PLAYING){
+          // nothing special while playing
+        }
+        else if (e.data === YT.PlayerState.ENDED){
+          /* rewind to the start time and play again */
+          player.seekTo(startSec,true);
+          player.playVideo();
+        }
+      }
     }
   });
-}
-
-/* ---------- Loop logic ---------- */
-let loopTimer=null;
-function startLoop(){
-  clearInterval(loopTimer);
-  loopTimer=setInterval(()=>{const t=player.getCurrentTime();if(endSec && t>=endSec)player.seekTo(startSec,true);},200);
 }
 
 /* ---------- Slider init & UI sync ---------- */
@@ -235,35 +145,35 @@ function initSliders(){
   const startL=document.getElementById('startLabel');
   const endL=document.getElementById('endLabel');
 
-  startS.max=endS.max=Math.floor(videoDuration);
-  startS.value=startSec;
-  endS.value=endSec||Math.floor(videoDuration);
+  startS.max = endS.max = Math.floor(videoDuration);
+  startS.value = startSec;
+  endS.value   = endSec;
 
-  startL.textContent=secToLabel(startSec);
-  endL.textContent=secToLabel(endSec||videoDuration);
+  startL.textContent = secToLabel(startSec);
+  endL.textContent   = secToLabel(endSec);
 }
 
-/* ---------- Slider event listeners ---------- */
+/* ---------- Slider listeners ---------- */
 document.getElementById('startSlider').addEventListener('input',e=>{
-  startSec=Number(e.target.value);
-  document.getElementById('startLabel').textContent=secToLabel(startSec);
-  if(endSec && startSec>endSec){
-    endSec=startSec;
+  startSec = Number(e.target.value);
+  document.getElementById('startLabel').textContent = secToLabel(startSec);
+  if (endSec && startSec > endSec){
+    endSec = startSec;
     const es=document.getElementById('endSlider');
-    es.value=endSec;
-    document.getElementById('endLabel').textContent=secToLabel(endSec);
+    es.value = endSec;
+    document.getElementById('endLabel').textContent = secToLabel(endSec);
   }
   setParams({start_time:startSec});
 });
 
 document.getElementById('endSlider').addEventListener('input',e=>{
-  endSec=Number(e.target.value);
-  document.getElementById('endLabel').textContent=secToLabel(endSec);
-  if(endSec<startSec){
-    startSec=endSec;
+  endSec = Number(e.target.value);
+  document.getElementById('endLabel').textContent = secToLabel(endSec);
+  if (endSec < startSec){
+    startSec = endSec;
     const ss=document.getElementById('startSlider');
-    ss.value=startSec;
-    document.getElementById('startLabel').textContent=secToLabel(startSec);
+    ss.value = startSec;
+    document.getElementById('startLabel').textContent = secToLabel(startSec);
   }
   setParams({end_time:endSec});
 });
@@ -273,9 +183,9 @@ document.getElementById('loadBtn').addEventListener('click',()=>{
   const raw=document.getElementById('urlInput').value.trim();
   if(!raw) return alert('Enter a YouTube URL or video ID.');
   const vid=extractVideoId(raw);
-  // keep any start/end already present in URL
-  startSec=parseFloat(getParam('start_time'))||0;
-  endSec=parseFloat(getParam('end_time'))||0;
+
+  startSec = parseFloat(getParam('start_time')) || 0;
+  endSec   = parseFloat(getParam('end_time'))   || 0;   // 0 will be reset to full length later
   setParams({v:vid,start_time:startSec,end_time:endSec});
   loadYouTubeAPI(()=>createPlayer(vid));
 });
